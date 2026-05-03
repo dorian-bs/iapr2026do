@@ -3,11 +3,4 @@ __pycache__/
 
 
 # ignore dorian's files
-.misc/
-docs/
-*.pkl
-*code-workspace
-.venv/
-.artifacts/
-.notebooks/
-.src/
+projodo/
