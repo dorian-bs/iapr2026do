@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 import cv2
 import joblib
@@ -23,6 +25,20 @@ from uno_vision.classification.features import (
 from uno_vision.paths import AUGMENTATIONS_DIR, CLASSIFIER_CLASSES_DIR, CLASSIFIER_MODELS_DIR, REFERENCE_CARDS_DIR
 
 
+def _resolve_training_logger(logger: logging.Logger | None) -> logging.Logger:
+    if logger is not None:
+        return logger
+    resolved = logging.getLogger(__name__)
+    resolved.setLevel(logging.INFO)
+    if resolved.handlers or logging.getLogger().handlers:
+        return resolved
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s", "%H:%M:%S"))
+    resolved.addHandler(handler)
+    resolved.propagate = False
+    return resolved
+
+
 @dataclass
 class ClassifierTrainingResult:
     color_clf: ExtraTreesClassifier
@@ -32,6 +48,7 @@ class ClassifierTrainingResult:
     rank_encoder: LabelEncoder
     pair_to_full_label: dict[tuple[str, str], str]
     metrics: dict[str, float]
+    timings: dict[str, float]
 
 
 def collect_classifier_samples(
@@ -137,15 +154,26 @@ def decode_predictions(pred_c, pred_r, color_encoder, rank_encoder, pair_to_full
 def train_classifiers(
     samples: list[tuple[str, str]] | None = None,
     test_size: float = 0.2,
+    logger: logging.Logger | None = None,
     random_state: int = 42,
 ) -> ClassifierTrainingResult:
+    training_logger = _resolve_training_logger(logger)
+    total_start = perf_counter()
     samples = samples or collect_classifier_samples()
     if not samples:
         raise RuntimeError("No classifier samples found.")
+    training_logger.info(
+        "Classifier training start | samples=%d | test_size=%.2f | estimator=ExtraTreesClassifier",
+        len(samples),
+        test_size,
+    )
     paths = [sample[0] for sample in samples]
     labels = [sample[1] for sample in samples]
     label_encoder, encoded, color_encoder, rank_encoder, y_color, y_rank, pair_to_full_label = _build_label_encoders(labels)
+    feature_start = perf_counter()
     x_color, x_rank, letterboxed_images = _extract_feature_matrices(paths)
+    feature_time = perf_counter() - feature_start
+    training_logger.info("Classifier features extracted | seconds=%.2f", feature_time)
 
     idx_all = np.arange(len(paths))
     train_idx, val_idx = train_test_split(
@@ -159,10 +187,12 @@ def train_classifiers(
     y_col_tr, y_col_va = y_color[train_idx], y_color[val_idx]
     y_rnk_tr, y_rnk_va = y_rank[train_idx], y_rank[val_idx]
     y_full_va = encoded[val_idx]
+    training_logger.info("Classifier split complete | train_samples=%d | val_samples=%d", len(train_idx), len(val_idx))
 
     rot_flags = [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
     aug_col = []
     aug_y_col = []
+    color_aug_start = perf_counter()
     for idx in train_idx:
         img = letterboxed_images[idx]
         for flag in rot_flags:
@@ -171,10 +201,13 @@ def train_classifiers(
             aug_y_col.append(y_color[idx])
     x_col_tr = np.vstack([x_col_tr, np.array(aug_col)])
     y_col_tr = np.concatenate([y_col_tr, np.array(aug_y_col)])
+    color_aug_time = perf_counter() - color_aug_start
+    training_logger.info("Classifier color augmentation complete | seconds=%.2f | samples=%d", color_aug_time, len(x_col_tr))
 
     rng = np.random.default_rng(random_state)
     aug_rank = []
     aug_y_rank = []
+    rank_aug_start = perf_counter()
     for idx in train_idx:
         img = letterboxed_images[idx]
         angle = float(rng.uniform(-8.0, 8.0))
@@ -199,9 +232,19 @@ def train_classifiers(
         aug_y_rank.append(y_rank[idx])
     x_rank_tr = np.vstack([x_rank_tr, np.array(aug_rank)])
     y_rnk_tr = np.concatenate([y_rnk_tr, np.array(aug_y_rank)])
+    rank_aug_time = perf_counter() - rank_aug_start
+    training_logger.info("Classifier rank augmentation complete | seconds=%.2f | samples=%d", rank_aug_time, len(x_rank_tr))
 
+    oversample_start = perf_counter()
     x_col_tr, y_col_tr = _oversample_features(x_col_tr, y_col_tr, random_state)
     x_rank_tr, y_rnk_tr = _oversample_features(x_rank_tr, y_rnk_tr, random_state)
+    oversample_time = perf_counter() - oversample_start
+    training_logger.info(
+        "Classifier oversampling complete | seconds=%.2f | color_samples=%d | rank_samples=%d",
+        oversample_time,
+        len(x_col_tr),
+        len(x_rank_tr),
+    )
 
     color_clf = ExtraTreesClassifier(
         n_estimators=700,
@@ -210,7 +253,10 @@ def train_classifiers(
         random_state=random_state,
         n_jobs=-1,
     )
+    color_fit_start = perf_counter()
     color_clf.fit(x_col_tr, y_col_tr)
+    color_fit_time = perf_counter() - color_fit_start
+    training_logger.info("Classifier color model fit complete | seconds=%.2f", color_fit_time)
 
     rank_clf = ExtraTreesClassifier(
         n_estimators=900,
@@ -219,12 +265,17 @@ def train_classifiers(
         random_state=random_state,
         n_jobs=-1,
     )
+    rank_fit_start = perf_counter()
     rank_clf.fit(x_rank_tr, y_rnk_tr)
+    rank_fit_time = perf_counter() - rank_fit_start
+    training_logger.info("Classifier rank model fit complete | seconds=%.2f", rank_fit_time)
 
+    eval_start = perf_counter()
     pred_col = color_clf.predict(x_col_va)
     pred_rnk = rank_clf.predict(x_rank_va)
     pred_full = decode_predictions(pred_col, pred_rnk, color_encoder, rank_encoder, pair_to_full_label)
     true_full = label_encoder.inverse_transform(y_full_va)
+    eval_time = perf_counter() - eval_start
     metrics = {
         "color_train_accuracy": float(color_clf.score(x_col_tr, y_col_tr)),
         "color_val_accuracy": float(color_clf.score(x_col_va, y_col_va)),
@@ -232,6 +283,24 @@ def train_classifiers(
         "rank_val_accuracy": float(rank_clf.score(x_rank_va, y_rnk_va)),
         "full_val_accuracy": float(accuracy_score(true_full, pred_full)),
     }
+    total_time = perf_counter() - total_start
+    timings = {
+        "feature_extraction": feature_time,
+        "color_augmentation": color_aug_time,
+        "rank_augmentation": rank_aug_time,
+        "oversampling": oversample_time,
+        "color_fit": color_fit_time,
+        "rank_fit": rank_fit_time,
+        "evaluation": eval_time,
+        "total": total_time,
+    }
+    training_logger.info(
+        "Classifier training complete | total=%.2fs | color_fit=%.2fs | rank_fit=%.2fs | full_val_accuracy=%.4f",
+        total_time,
+        color_fit_time,
+        rank_fit_time,
+        metrics["full_val_accuracy"],
+    )
     return ClassifierTrainingResult(
         color_clf=color_clf,
         rank_clf=rank_clf,
@@ -240,6 +309,7 @@ def train_classifiers(
         rank_encoder=rank_encoder,
         pair_to_full_label=pair_to_full_label,
         metrics=metrics,
+        timings=timings,
     )
 
 

@@ -18,11 +18,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Train the UNO card segmentation model.")
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--num-workers", type=int, default=None)
+    parser.add_argument("--no-mixed-precision", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     pairs = collect_segmentation_pairs()
     print(f"Loaded {len(pairs)} segmentation pairs.")
-    history = train_segmenter(pairs=pairs, epochs=args.epochs, batch_size=args.batch_size, random_state=args.seed)
+    history = train_segmenter(
+        pairs=pairs,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        mixed_precision=not args.no_mixed_precision,
+        random_state=args.seed,
+    )
     print(f"Saved segmenter to {history.model_path}")
     print(f"Final val IoU: {history.val_ious[-1]:.4f}")
     return 0

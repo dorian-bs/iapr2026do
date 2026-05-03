@@ -54,15 +54,16 @@ class UNetSmall(nn.Module):
 
 
 def dice_loss_from_logits(logits, targets, eps: float = 1e-6):
-    probs = torch.sigmoid(logits).view(-1)
-    targets = targets.view(-1)
+    probs = torch.sigmoid(logits.float()).view(-1)
+    targets = targets.float().view(-1)
     intersection = (probs * targets).sum()
     dice = (2.0 * intersection + eps) / (probs.sum() + targets.sum() + eps)
     return 1.0 - dice
 
 
 def iou_score_from_logits(logits, targets, thresh: float = 0.5, eps: float = 1e-6) -> float:
-    probs = torch.sigmoid(logits)
+    probs = torch.sigmoid(logits.float())
+    targets = targets.float()
     preds = (probs > thresh).float()
     inter = (preds * targets).sum(dim=(1, 2, 3))
     union = ((preds + targets) > 0).float().sum(dim=(1, 2, 3))

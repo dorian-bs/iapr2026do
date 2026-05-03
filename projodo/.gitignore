@@ -10,6 +10,10 @@ docs/project_presentation.pdf
 data/raw/
 data/processed/augmentations/images/*.jpg
 data/processed/augmentations/masks/*.jpg
+data/processed/reference_cards/L1000765/**/*.jpg
+data/processed/reference_cards/L1000766/**/*.jpg
+data/processed/reference_cards/L1000767/**/*.jpg
+data/processed/reference_cards/L1000768/**/*.jpg
 
 data/interim/
 data/cache/
