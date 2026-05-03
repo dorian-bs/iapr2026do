@@ -2,14 +2,14 @@
 __pycache__/
 *.code-workspace
 *.pkl
-*.jpg
 
 docs/project_presentation.pdf
 
 # Official challenge inputs and local/generated scratch data can be large.
 data/raw/
-data/processed/augmentations/images/
-data/processed/augmentations/masks/
+data/processed/augmentations/images/*.jpg
+data/processed/augmentations/masks/*.jpg
+
 data/interim/
 data/cache/
 data/external/
