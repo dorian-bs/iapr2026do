@@ -2,6 +2,7 @@
 __pycache__/
 *.code-workspace
 *.pkl
+.venv/
 
 docs/project_presentation.pdf
 
