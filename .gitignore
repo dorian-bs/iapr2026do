@@ -1,4 +1,23 @@
 .misc/
-data/
 __pycache__/
 *.code-workspace
+*.pkl
+*.jpg
+
+docs/project_presentation.pdf
+
+# Official challenge inputs and local/generated scratch data can be large.
+data/raw/
+data/processed/augmentations/images/
+data/processed/augmentations/masks/
+data/interim/
+data/cache/
+data/external/
+
+# Local artifact outputs that are reproducible or too noisy for version control.
+artifacts/logs/*
+!artifacts/logs/README.md
+artifacts/runs/*
+!artifacts/runs/README.md
+artifacts/cache/*
+!artifacts/cache/README.md

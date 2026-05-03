@@ -1,0 +1,20 @@
+# Core numerical and image-processing stack
+numpy>=1.26
+opencv-python>=4.10
+Pillow>=10.3
+scipy>=1.13
+scikit-image>=0.24
+
+# Classical ML utilities
+scikit-learn>=1.5
+joblib>=1.4
+
+# Deep learning stack
+# If you need a CUDA-enabled build, install torch/torchvision from pytorch.org first.
+torch>=2.6
+torchvision>=0.21
+
+# Plotting and notebook workflow
+matplotlib>=3.9
+jupyterlab>=4.2
+ipykernel>=6.29
