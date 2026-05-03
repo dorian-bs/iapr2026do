@@ -1,0 +1,3 @@
+# Directories outside projodo/ must be ignored from the repository root.
+/data/
+/project/
