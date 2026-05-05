@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil
 from pathlib import Path
 
 import cv2
@@ -43,6 +44,87 @@ def _odd(value: float) -> int:
     return v if v % 2 == 1 else v + 1
 
 
+def _rounded_rect_mask(height: int, width: int, corner_radius: int) -> np.ndarray:
+    """Return a filled axis-aligned rounded rectangle mask of size (height, width)."""
+    mask = np.zeros((height, width), dtype=np.uint8)
+    if height <= 0 or width <= 0:
+        return mask
+
+    # Keep radius valid for tiny crops; if too small, fall back to full rectangle.
+    max_radius = (min(height, width) - 1) // 2
+    radius = min(max(corner_radius, 0), max_radius)
+    if radius <= 0:
+        mask[:, :] = 255
+        return mask
+
+    cv2.rectangle(mask, (radius, 0), (width - radius - 1, height - 1), 255, thickness=-1)
+    cv2.rectangle(mask, (0, radius), (width - 1, height - radius - 1), 255, thickness=-1)
+
+    cv2.circle(mask, (radius, radius), radius, 255, thickness=-1)
+    cv2.circle(mask, (width - radius - 1, radius), radius, 255, thickness=-1)
+    cv2.circle(mask, (radius, height - radius - 1), radius, 255, thickness=-1)
+    cv2.circle(mask, (width - radius - 1, height - radius - 1), radius, 255, thickness=-1)
+    return mask
+
+
+def _rounded_rotated_rect_mask(
+    shape: tuple[int, int],
+    rect: tuple[tuple[float, float], tuple[float, float], float],
+    rounded_corner_ratio: float,
+    fixed_card_width: int | None = None,
+    fixed_card_height: int | None = None,
+) -> np.ndarray:
+    """Return a full-canvas mask of a rounded rotated rectangle."""
+    h, w = shape
+    (cx, cy), (rw, rh), angle = rect
+    if rw < rh:
+        rw, rh = rh, rw
+        angle -= 90
+
+    if fixed_card_width is not None or fixed_card_height is not None:
+        if fixed_card_width is None or fixed_card_height is None:
+            raise ValueError(
+                "Both fixed_card_width and fixed_card_height must be set together."
+            )
+        fw = max(1, int(round(fixed_card_width)))
+        fh = max(1, int(round(fixed_card_height)))
+        rw, rh = float(max(fw, fh)), float(min(fw, fh))
+
+    rw_i, rh_i = int(np.ceil(rw)), int(np.ceil(rh))
+    corner_radius = int(round(min(rh_i, rw_i) * rounded_corner_ratio))
+    local_mask = _rounded_rect_mask(rh_i, rw_i, corner_radius)
+
+    # Compose local mask in the rotated frame, then map back to original coordinates.
+    rotated_canvas = np.zeros((h, w), dtype=np.uint8)
+    x0 = int(round(cx - rw / 2))
+    y0 = int(round(cy - rh / 2))
+    x1 = x0 + rw_i
+    y1 = y0 + rh_i
+
+    dst_x0 = max(0, x0)
+    dst_y0 = max(0, y0)
+    dst_x1 = min(w, x1)
+    dst_y1 = min(h, y1)
+    if dst_x1 <= dst_x0 or dst_y1 <= dst_y0:
+        return rotated_canvas
+
+    src_x0 = dst_x0 - x0
+    src_y0 = dst_y0 - y0
+    src_x1 = src_x0 + (dst_x1 - dst_x0)
+    src_y1 = src_y0 + (dst_y1 - dst_y0)
+    rotated_canvas[dst_y0:dst_y1, dst_x0:dst_x1] = local_mask[src_y0:src_y1, src_x0:src_x1]
+
+    M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+    M_inv = cv2.invertAffineTransform(M)
+    return cv2.warpAffine(
+        rotated_canvas,
+        M_inv,
+        (w, h),
+        flags=cv2.INTER_NEAREST,
+        borderValue=0,
+    )
+
+
 def _reference_binary_mask(
     gray: np.ndarray,
     adaptive_block_size: int = 11,
@@ -61,8 +143,8 @@ def _reference_binary_mask(
         blockSize=_odd(adaptive_block_size),
         C=adaptive_c,
     )
-    blurred = cv2.medianBlur(adaptive_image, _odd(pre_blur_size))
-    binary = blurred.copy()
+    median_filtered = cv2.medianBlur(adaptive_image, _odd(pre_blur_size))
+    binary = median_filtered.copy()
     if np.mean(binary == 255) > 0.5:
         binary = cv2.bitwise_not(binary)
     kernel1 = np.ones((dilate_size_1, dilate_size_1), np.uint8)
@@ -101,11 +183,11 @@ def _mask_pipeline_steps(
         C=adaptive_c,
     )
 
-    # Step 2: Median blur to remove noise
-    blurred = cv2.medianBlur(adaptive_image, _odd(pre_blur_size))
+    # Step 2: Median filter right after adaptive threshold to remove noise
+    median_filtered = cv2.medianBlur(adaptive_image, _odd(pre_blur_size))
 
     # Step 3: Invert if background is white, then dilate
-    binary = blurred.copy()
+    binary = median_filtered.copy()
     if np.mean(binary == 255) > 0.5:
         binary = cv2.bitwise_not(binary)
     kernel1 = np.ones((dilate_size_1, dilate_size_1), np.uint8)
@@ -140,7 +222,7 @@ def _mask_pipeline_steps(
 
     return {
         "1 · Adaptive threshold [block/C]": adaptive_image,
-        "2 · Median blur [pre_blur_size]": blurred,
+        "2 · Median filter [pre_blur_size]": median_filtered,
         "3 · Invert + Dilate [dilate_size_1]": dilated1,
         "4 · Skeletonize": skeleton,
         "5 · Dilate skeleton [dilate_size_2]": dilated2,
@@ -166,8 +248,11 @@ def extract_reference_card_assets(
     # extraction hyperparameters
     min_ar: float = 0.3,
     max_ar: float = 2.0,
+    fixed_card_width: int | None = None,
+    fixed_card_height: int | None = None,
+    rounded_corner_ratio: float = 0.08,
 ) -> ReferenceExtractionResult:
-    """Extract card crops, component masks, and filled masks from one reference image."""
+    """Extract card crops, component masks, and fitted rounded-rectangle masks."""
 
     image_path = image_dir / f"{image_name}.jpg"
     gray = np.array(Image.open(image_path).convert("L"))
@@ -188,6 +273,20 @@ def extract_reference_card_assets(
         gray, adaptive_block_size, adaptive_c, pre_blur_size,
         dilate_size_1, dilate_size_2, post_blur_size, min_area_abs,
     )
+
+    use_fixed_size = fixed_card_width is not None or fixed_card_height is not None
+    if use_fixed_size and (fixed_card_width is None or fixed_card_height is None):
+        raise ValueError(
+            "Both fixed_card_width and fixed_card_height must be set together."
+        )
+    fixed_long: float | None = None
+    fixed_short: float | None = None
+    if use_fixed_size:
+        fw = max(1, int(round(fixed_card_width)))
+        fh = max(1, int(round(fixed_card_height)))
+        fixed_long = float(max(fw, fh))
+        fixed_short = float(min(fw, fh))
+
     n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(masks, connectivity=8)
     if n_labels <= 1:
         return ReferenceExtractionResult(image_name, out_dir, [], [], [])
@@ -215,36 +314,47 @@ def extract_reference_card_assets(
 
         contours_comp, _ = cv2.findContours(component_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if contours_comp:
-            # Convex hulls produce filled masks; minAreaRect gives the card's true orientation.
-            hull = cv2.convexHull(np.vstack(contours_comp))
-            closed_mask = np.zeros_like(component_mask)
-            cv2.fillPoly(closed_mask, [hull], 255)
-
-            (cx, cy), (rw, rh), angle = cv2.minAreaRect(hull)
+            # Fit an oriented rectangle, then build a rounded rectangle in rectified crop space.
+            contour_points = np.vstack(contours_comp)
+            (cx, cy), (rw, rh), angle = cv2.minAreaRect(contour_points)
             if rw < rh:
                 rw, rh = rh, rw
                 angle -= 90
+            if fixed_long is not None and fixed_short is not None:
+                rw, rh = fixed_long, fixed_short
             rw_i, rh_i = int(np.ceil(rw)), int(np.ceil(rh))
             M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
             warped_img = cv2.warpAffine(
                 img_color, M, (img_color.shape[1], img_color.shape[0]),
                 borderValue=(255, 255, 255),
             )
-            warped_mask = cv2.warpAffine(
-                closed_mask, M, (closed_mask.shape[1], closed_mask.shape[0]),
-                flags=cv2.INTER_NEAREST, borderValue=0,
-            )
             x0 = max(0, int(round(cx - rw / 2)))
             y0 = max(0, int(round(cy - rh / 2)))
             x1 = min(warped_img.shape[1], x0 + rw_i)
             y1 = min(warped_img.shape[0], y0 + rh_i)
             crop_color = warped_img[y0:y1, x0:x1]
-            crop_mask_tight = warped_mask[y0:y1, x0:x1]
+
+            crop_h, crop_w = crop_color.shape[:2]
+            corner_radius = int(round(min(crop_h, crop_w) * rounded_corner_ratio))
+            crop_mask_tight = _rounded_rect_mask(crop_h, crop_w, corner_radius)
         else:
-            closed_mask = component_mask.copy()
-            x, y, w, h = cv2.boundingRect(closed_mask)
-            crop_color = img_color[y:y + h, x:x + w]
-            crop_mask_tight = closed_mask[y:y + h, x:x + w]
+            x, y, bw, bh = cv2.boundingRect(component_mask)
+            if fixed_long is not None and fixed_short is not None:
+                cx = x + bw / 2.0
+                cy = y + bh / 2.0
+                rw_i = int(fixed_long)
+                rh_i = int(fixed_short)
+                x0 = max(0, int(round(cx - rw_i / 2)))
+                y0 = max(0, int(round(cy - rh_i / 2)))
+                x1 = min(img_color.shape[1], x0 + rw_i)
+                y1 = min(img_color.shape[0], y0 + rh_i)
+                crop_color = img_color[y0:y1, x0:x1]
+            else:
+                crop_color = img_color[y:y + bh, x:x + bw]
+
+            crop_h, crop_w = crop_color.shape[:2]
+            corner_radius = int(round(min(crop_h, crop_w) * rounded_corner_ratio))
+            crop_mask_tight = _rounded_rect_mask(crop_h, crop_w, corner_radius)
 
         # Rotate landscape crops 90° so all saved cards are portrait (height >= width).
         if crop_color.shape[1] > crop_color.shape[0]:
@@ -284,16 +394,19 @@ def plot_pipeline_steps(
     pipeline_steps: dict[str, np.ndarray],
     title: str = "",
 ) -> None:
-    """Display the 3×3 mask-pipeline debug grid."""
+    """Display mask-pipeline debug panels in an adaptive 3-column grid."""
     import matplotlib.pyplot as plt
 
     panels = [("0 · Original", color_rgb), *pipeline_steps.items()]
-    fig, axes = plt.subplots(3, 3, figsize=(15, 11))
-    for ax in axes.flat:
+    n_cols = 3
+    n_rows = max(1, ceil(len(panels) / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 3.6 * n_rows))
+    axes = np.atleast_1d(axes).ravel()
+    for ax in axes:
         ax.axis("off")
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
-    for ax, (lbl, img) in zip(axes.flat, panels):
+    for ax, (lbl, img) in zip(axes, panels):
         display = _fit_image_for_axis(img, ax, renderer)
         ax.imshow(display, cmap="gray" if display.ndim == 2 else None)
         ax.set_title(lbl, fontsize=9)
@@ -306,6 +419,9 @@ def plot_crop_preview(
     result: ReferenceExtractionResult,
     title: str = "",
     n: int = 4,
+    rounded_corner_ratio: float = 0.08,
+    fixed_card_width: int | None = None,
+    fixed_card_height: int | None = None,
 ) -> None:
     """Display two composite views then a per-card grid for the first n cards."""
     import matplotlib.pyplot as plt
@@ -318,45 +434,55 @@ def plot_crop_preview(
     h, w = color_rgb.shape[:2]
     n_cards = len(result.components)
 
-    # Build panel 1: final selected component mask (pre-closure), color-coded per card.
-    final_skeleton_colored = np.zeros((h, w, 3), dtype=np.uint8)
-    # Build panel 2: reference image with semi-transparent closed-mask fills
+    # Build panel 1: unclosed selected component masks, color-coded per card.
+    final_components_colored = np.zeros((h, w, 3), dtype=np.uint8)
+    # Build panel 2: reference image with semi-transparent fitted rounded-rectangle fills
     fill_layer = np.zeros_like(color_rgb)
     closed_union = np.zeros((h, w), dtype=bool)
-    hull_entries: list[tuple[np.ndarray, np.ndarray]] = []
+    rounded_entries: list[tuple[np.ndarray, np.ndarray]] = []
     for i, comp_path in enumerate(result.components):
         comp = cv2.imread(str(comp_path), cv2.IMREAD_GRAYSCALE)
         if comp is None:
             continue
         rgb = (np.array(hsv_to_rgb([i / max(n_cards, 1), 0.85, 0.95])) * 255).astype(np.uint8)
-        final_skeleton_colored[comp > 0] = rgb
+        final_components_colored[comp > 0] = rgb
         contours, _ = cv2.findContours(comp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             continue
-        hull = cv2.convexHull(np.vstack(contours))
-        closed_mask = np.zeros_like(comp)
-        cv2.fillPoly(closed_mask, [hull], 255)
+        rect = cv2.minAreaRect(np.vstack(contours))
+
+        closed_mask = _rounded_rotated_rect_mask(
+            comp.shape,
+            rect,
+            rounded_corner_ratio,
+            fixed_card_width=fixed_card_width,
+            fixed_card_height=fixed_card_height,
+        )
         closed_region = closed_mask > 0
         fill_layer[closed_region] = rgb
         closed_union |= closed_region
-        hull_entries.append((hull, rgb))
+        closed_contours, _ = cv2.findContours(
+            closed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        if closed_contours:
+            rounded_entries.append((max(closed_contours, key=cv2.contourArea), rgb))
 
     overlay = color_rgb.copy()
     alpha = 0.1
     overlay[closed_union] = (
         (1.0 - alpha) * color_rgb[closed_union] + alpha * fill_layer[closed_union]
     ).astype(np.uint8)
-    for hull, rgb in hull_entries:
-        cv2.polylines(overlay, [hull], True, rgb.tolist(), 8, lineType=cv2.LINE_AA)
+    for contour, rgb in rounded_entries:
+        cv2.drawContours(overlay, [contour], -1, rgb.tolist(), 8, lineType=cv2.LINE_AA)
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
-    axes[0].imshow(_fit_image_for_axis(final_skeleton_colored, axes[0], renderer))
-    axes[0].set_title("Final skeletonized mask (colored)")
+    axes[0].imshow(_fit_image_for_axis(final_components_colored, axes[0], renderer))
+    axes[0].set_title("Final selected component mask (colored, unclosed)")
     axes[0].axis("off")
     axes[1].imshow(_fit_image_for_axis(overlay, axes[1], renderer))
-    axes[1].set_title("Reference image + closed-mask overlay")
+    axes[1].set_title("Reference image + fitted rounded-rectangle overlay")
     axes[1].axis("off")
     plt.suptitle(title, fontsize=12)
     plt.tight_layout()
