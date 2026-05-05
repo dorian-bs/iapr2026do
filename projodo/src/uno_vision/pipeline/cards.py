@@ -7,9 +7,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from scipy import ndimage as ndi
-from skimage.feature import peak_local_max
-from skimage.segmentation import watershed
 
 from uno_vision.classification.predict import CardClassifier, load_card_classifier
 from uno_vision.segmentation.inference import load_segmenter, segment_image
@@ -29,44 +26,60 @@ class CardRegionPrediction:
 
 def split_probability_mask(
     global_prob: np.ndarray,
-    high_prob_thresh: float = 0.75,
+    high_prob_thresh: float = 0.65,
     card_min_dist: int = 60,
 ) -> tuple[np.ndarray, list[tuple[int, int, int, int, int, int]]]:
-    """Split a foreground probability mask into card-shaped connected regions."""
+    """Build conservative connected regions from a foreground probability mask."""
 
+    _ = card_min_dist
     high_mask = (global_prob >= high_prob_thresh).astype(np.uint8)
+    high_mask = cv2.morphologyEx(high_mask, cv2.MORPH_CLOSE, np.ones((17, 17), np.uint8))
     high_mask = cv2.morphologyEx(high_mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
-    high_mask = cv2.morphologyEx(high_mask, cv2.MORPH_CLOSE, np.ones((11, 11), np.uint8))
 
-    # Peaks in the distance transform seed watershed splits for touching cards.
-    distance = ndi.distance_transform_edt(high_mask)
-    coords = peak_local_max(distance, min_distance=card_min_dist, labels=high_mask)
-    peak_mask = np.zeros(distance.shape, dtype=bool)
-    if coords.size > 0:
-        peak_mask[tuple(coords.T)] = True
-    markers, _ = ndi.label(peak_mask)
-    if markers.max() == 0:
-        # If no peaks survive, connected components still gives a useful coarse fallback.
-        markers = ndi.label(high_mask)[0]
-    ws_labels = watershed(-distance, markers, mask=high_mask)
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(high_mask, connectivity=8)
 
     img_h, img_w = high_mask.shape
     img_area = img_h * img_w
-    min_area = max(1200, int(0.0015 * img_area))
+    min_area = max(1500, int(0.0012 * img_area))
     regions: list[tuple[int, int, int, int, int, int]] = []
-    for label in range(1, ws_labels.max() + 1):
-        comp = (ws_labels == label).astype(np.uint8)
-        area = int(comp.sum())
+    for label in range(1, n_labels):
+        x = int(stats[label, cv2.CC_STAT_LEFT])
+        y = int(stats[label, cv2.CC_STAT_TOP])
+        w = int(stats[label, cv2.CC_STAT_WIDTH])
+        h = int(stats[label, cv2.CC_STAT_HEIGHT])
+        area = int(stats[label, cv2.CC_STAT_AREA])
         if area < min_area:
             continue
-        ys, xs = np.where(comp)
-        x = int(xs.min())
-        y = int(ys.min())
-        w = int(xs.max()) - x + 1
-        h = int(ys.max()) - y + 1
+        aspect_ratio = w / max(1, h)
+        fill_ratio = area / max(1, w * h)
+        if not (0.2 <= aspect_ratio <= 3.5) or fill_ratio < 0.2:
+            continue
         regions.append((x, y, w, h, area, label))
     regions.sort(key=lambda region: region[4], reverse=True)
-    return ws_labels, regions
+
+    clean_labels = np.zeros_like(labels, dtype=np.int32)
+    for index, (_, _, _, _, _, label) in enumerate(regions, start=1):
+        clean_labels[labels == label] = index
+    return clean_labels, regions
+
+
+def regions_from_proposal_boxes(
+    global_prob: np.ndarray,
+    boxes: list[tuple[int, int, int, int]],
+    prob_thresh: float = 0.35,
+    min_mask_fraction: float = 0.05,
+) -> list[tuple[int, int, int, int, int, int]]:
+    """Use classical proposal boxes as card instances when the segmenter agrees."""
+
+    regions: list[tuple[int, int, int, int, int, int]] = []
+    for label, (x, y, w, h) in enumerate(boxes, start=1):
+        prob_crop = global_prob[y:y + h, x:x + w]
+        mask_area = int((prob_crop >= prob_thresh).sum())
+        if mask_area < max(400, int(min_mask_fraction * w * h)):
+            continue
+        regions.append((x, y, w, h, mask_area, label))
+    regions.sort(key=lambda region: region[4], reverse=True)
+    return regions
 
 
 def classify_regions(
@@ -92,8 +105,10 @@ def classify_regions(
 def predict_cards_in_image(
     image_path: str | Path,
     max_components: int = 24,
-    high_prob_thresh: float = 0.75,
+    high_prob_thresh: float = 0.65,
     card_min_dist: int = 60,
+    use_proposal_boxes: bool = True,
+    proposal_prob_thresh: float = 0.35,
 ) -> tuple[list[CardRegionPrediction], np.ndarray, np.ndarray]:
     """Run segmentation, region splitting, and card classification for one image."""
 
@@ -101,7 +116,13 @@ def predict_cards_in_image(
     if img_bgr is None:
         raise FileNotFoundError(f"Cannot read image: {image_path}")
     model, device, _ = load_segmenter()
-    global_prob, _, _, _ = segment_image(img_bgr, model, device, max_components=max_components)
-    ws_labels, regions = split_probability_mask(global_prob, high_prob_thresh, card_min_dist)
+    global_prob, boxes, _, _ = segment_image(img_bgr, model, device, max_components=max_components)
+    if use_proposal_boxes:
+        regions = regions_from_proposal_boxes(global_prob, boxes, prob_thresh=proposal_prob_thresh)
+        ws_labels = np.zeros(global_prob.shape, dtype=np.int32)
+        for index, (x, y, w, h, _, _) in enumerate(regions, start=1):
+            ws_labels[y:y + h, x:x + w] = index
+    else:
+        ws_labels, regions = split_probability_mask(global_prob, high_prob_thresh, card_min_dist)
     classifier = load_card_classifier()
     return classify_regions(img_bgr, regions, classifier), global_prob, ws_labels

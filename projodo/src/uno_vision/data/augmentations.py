@@ -42,6 +42,18 @@ def load_aligned_mask(closed_dir: Path, crop_idx: int, target_h: int, target_w: 
     return mask_crop > 127
 
 
+def load_canvas_mask(closed_dir: Path, crop_idx: int, target_h: int, target_w: int) -> np.ndarray:
+    """Load a crop-aligned closed mask while preserving its full saved canvas."""
+
+    mask_path = closed_dir / f"closed_component_{crop_idx}.jpg"
+    closed_mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+    if closed_mask is None:
+        raise FileNotFoundError(f"Mask not found: {mask_path}")
+    if closed_mask.shape[:2] != (target_h, target_w):
+        closed_mask = cv2.resize(closed_mask, (target_w, target_h), interpolation=cv2.INTER_NEAREST)
+    return closed_mask > 127
+
+
 def make_pattern_variants(h: int, w: int, rng: np.random.Generator | None = None) -> dict[str, np.ndarray]:
     """Create simple procedural backgrounds for foreground-preserving augmentations."""
 
@@ -69,6 +81,16 @@ def make_pattern_variants(h: int, w: int, rng: np.random.Generator | None = None
     patterns["pattern_checkerboard"] = checker
     patterns["pattern_noise"] = rng.integers(0, 256, size=(h, w, 3), dtype=np.uint8)
     return patterns
+
+
+def consume_pattern_rng(h: int, w: int, rng: np.random.Generator) -> None:
+    """Advance RNG exactly like pattern background generation without materializing images."""
+
+    block = 48
+    for r in range(0, h, block):
+        for c in range(0, w, block):
+            rng.integers(0, 256, size=3, dtype=np.uint8)
+    rng.integers(0, 256, size=(h, w, 3), dtype=np.uint8)
 
 
 def apply_pattern_background(img_bgr: np.ndarray, mask_fg: np.ndarray, pattern_bgr: np.ndarray) -> np.ndarray:
@@ -173,7 +195,7 @@ def generate_augmentation_images(
                 continue
             h, w = img_bgr.shape[:2]
             try:
-                mask_fg = load_aligned_mask(masks_dir, crop_idx, h, w)
+                mask_fg = load_canvas_mask(masks_dir, crop_idx, h, w)
             except FileNotFoundError:
                 mask_fg = None
             for aug_i, (_, aug_img) in enumerate(crop_image_augmentations(img_bgr, mask_fg, rng), start=1):
@@ -192,7 +214,7 @@ def generate_augmentation_images(
 def load_binary_mask(closed_dir: Path, crop_idx: int, target_h: int, target_w: int) -> np.ndarray:
     """Load a closed component mask and align it to the corresponding crop canvas."""
 
-    aligned_bool = load_aligned_mask(closed_dir, crop_idx, target_h, target_w)
+    aligned_bool = load_canvas_mask(closed_dir, crop_idx, target_h, target_w)
     return aligned_bool.astype(np.uint8) * 255
 
 
@@ -241,6 +263,8 @@ def mask_augmentations(mask: np.ndarray, rng: np.random.Generator) -> list[tuple
         cv2.rectangle(cover, (x1, y1), (min(w, x1 + rect_w), min(h, y1 + rect_h)), 0, -1)
         aug_masks.append((f"white_rectangle_{rect_i}", cover))
 
+    # Keep per-crop RNG aligned with image augmentations so later random occlusions match.
+    consume_pattern_rng(h, w, rng)
     for name in ("pattern_stripes", "pattern_big_rectangles", "pattern_checkerboard", "pattern_noise"):
         aug_masks.append((name, mask.copy()))
 
