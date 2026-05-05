@@ -8,6 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PIL import Image
+from skimage.morphology import skeletonize
 
 from uno_vision.paths import REFERENCE_CARDS_DIR, REFERENCE_IMAGES_DIR
 
@@ -44,80 +45,109 @@ def _odd(value: float) -> int:
 
 def _reference_binary_mask(
     gray: np.ndarray,
-    canny_blur_size: int = 5,
-    canny_low: int = 30,
-    canny_high: int = 100,
-    blob_close_size: int = 40,
-    blur_after: int = 33,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Build a coarse foreground mask from Canny edges in a reference image."""
+    adaptive_block_size: int = 11,
+    adaptive_c: int = 4,
+    pre_blur_size: int = 3,
+    dilate_size_1: int = 17,
+    dilate_size_2: int = 17,
+    post_blur_size: int = 33,
+    min_area_abs: int = 100000,
+) -> np.ndarray:
+    """Build a foreground mask using adaptive threshold + skeletonize pipeline."""
+    adaptive_image = cv2.adaptiveThreshold(
+        gray, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        blockSize=_odd(adaptive_block_size),
+        C=adaptive_c,
+    )
+    blurred = cv2.medianBlur(adaptive_image, _odd(pre_blur_size))
+    binary = blurred.copy()
+    if np.mean(binary == 255) > 0.5:
+        binary = cv2.bitwise_not(binary)
+    kernel1 = np.ones((dilate_size_1, dilate_size_1), np.uint8)
+    dilated1 = cv2.morphologyEx(binary, cv2.MORPH_DILATE, kernel1)
+    skeleton = skeletonize(dilated1 > 0).astype(np.uint8) * 255
+    kernel2 = np.ones((dilate_size_2, dilate_size_2), np.uint8)
+    dilated2 = cv2.morphologyEx(skeleton, cv2.MORPH_DILATE, kernel2)
+    smoothed = cv2.medianBlur(dilated2, _odd(post_blur_size))
+    no_small = smoothed.copy()
+    contours, _ = cv2.findContours(no_small, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for c in contours:
+        if cv2.contourArea(c) < min_area_abs:
+            cv2.drawContours(no_small, [c], -1, 0, cv2.FILLED)
+    return no_small
 
-    scale = max(gray.shape) / 4000.0
-    k_blur = _odd(canny_blur_size * scale)
-    blurred = cv2.GaussianBlur(gray, (k_blur, k_blur), 0)
-    edges = cv2.Canny(blurred, canny_low, canny_high)
-    k_close = max(3, int(blob_close_size * scale))
 
-    # Closing turns broken card outlines into connected blobs for component labeling.
-    binary = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((k_close, k_close), np.uint8))
-    binary = cv2.medianBlur(binary, _odd(blur_after * scale))
-    return edges, binary
+def _mask_pipeline_steps(
+    gray: np.ndarray,
+    adaptive_block_size: int = 11,
+    adaptive_c: int = 4,
+    pre_blur_size: int = 3,
+    dilate_size_1: int = 17,
+    dilate_size_2: int = 17,
+    post_blur_size: int = 33,
+    min_area_abs: int = 100000,
+    min_ar: float = 0.3,
+    max_ar: float = 2.0,
+) -> dict[str, np.ndarray]:
+    """Return each intermediate mask image keyed by step label, for debugging."""
+    # Step 1: Adaptive threshold
+    adaptive_image = cv2.adaptiveThreshold(
+        gray, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        blockSize=_odd(adaptive_block_size),
+        C=adaptive_c,
+    )
 
+    # Step 2: Median blur to remove noise
+    blurred = cv2.medianBlur(adaptive_image, _odd(pre_blur_size))
 
-# def _mask_pipeline_steps(
-#     gray: np.ndarray,
-#     canny_blur_size: int = 5,
-#     canny_low: int = 30,
-#     canny_high: int = 100,
-#     blob_close_size: int = 40,
-#     blur_after: int = 33,
-#     min_area_abs: int = 2500,
-#     min_area_frac: float = 0.002,
-#     close_size: int = 21,
-#     open_size: int = 7,
-#     min_ar: float = 0.3,
-#     max_ar: float = 2.0,
-# ) -> dict[str, np.ndarray]:
-#     """Return each intermediate mask image keyed by step label, for debugging."""
-#     scale = max(gray.shape) / 4000.0
-#     img_area = gray.shape[0] * gray.shape[1]
+    # Step 3: Invert if background is white, then dilate
+    binary = blurred.copy()
+    if np.mean(binary == 255) > 0.5:
+        binary = cv2.bitwise_not(binary)
+    kernel1 = np.ones((dilate_size_1, dilate_size_1), np.uint8)
+    dilated1 = cv2.morphologyEx(binary, cv2.MORPH_DILATE, kernel1)
 
-#     k_blur = _odd(canny_blur_size * scale)
-#     blurred = cv2.GaussianBlur(gray, (k_blur, k_blur), 0)
-#     edges = cv2.Canny(blurred, canny_low, canny_high)
-#     k_close = max(3, int(blob_close_size * scale))
-#     closed_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((k_close, k_close), np.uint8))
-#     binary = cv2.medianBlur(closed_edges, _odd(blur_after * scale))
+    # Step 4: Skeletonize
+    skeleton = skeletonize(dilated1 > 0).astype(np.uint8) * 255
 
-#     no_small = binary.copy()
-#     min_area = max(min_area_abs * scale ** 2, min_area_frac * img_area)
-#     contours, _ = cv2.findContours(no_small, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-#     for c in contours:
-#         if cv2.contourArea(c) < min_area:
-#             cv2.drawContours(no_small, [c], -1, 0, cv2.FILLED)
+    # Step 5: Dilate skeleton to thicken it
+    kernel2 = np.ones((dilate_size_2, dilate_size_2), np.uint8)
+    dilated2 = cv2.morphologyEx(skeleton, cv2.MORPH_DILATE, kernel2)
 
-#     closed2 = cv2.morphologyEx(no_small, cv2.MORPH_CLOSE, np.ones((close_size, close_size), np.uint8))
-#     opened = cv2.morphologyEx(closed2, cv2.MORPH_OPEN, np.ones((open_size, open_size), np.uint8))
+    # Step 6: Smooth
+    smoothed = cv2.medianBlur(dilated2, _odd(post_blur_size))
 
-#     n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(opened, connectivity=8)
-#     rng = np.random.default_rng(42)
-#     colors = np.vstack([[0, 0, 0], rng.integers(80, 220, (max(n_labels - 1, 0), 3))])
-#     labeled = colors[labels].astype(np.uint8)
-#     for lbl in range(1, n_labels):
-#         w, h = stats[lbl, cv2.CC_STAT_WIDTH], stats[lbl, cv2.CC_STAT_HEIGHT]
-#         if not (min_ar <= w / max(h, 1) <= max_ar):
-#             labeled[labels == lbl] = 40  # dim rejected components
+    # Step 7: Remove small contours
+    no_small = smoothed.copy()
+    contours, _ = cv2.findContours(no_small, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for c in contours:
+        if cv2.contourArea(c) < min_area_abs:
+            cv2.drawContours(no_small, [c], -1, 0, cv2.FILLED)
 
-#     return {
-#         "1 · GaussianBlur [canny_blur_size]": blurred,
-#         "2 · Canny [canny_low / canny_high]": edges,
-#         "3 · Morph CLOSE [blob_close_size]": closed_edges,
-#         "4 · Median blur [blur_after]": binary,
-#         "5 · Small contours removed [min_area_*]": no_small,
-#         "6 · Morph CLOSE [close_size]": closed2,
-#         "7 · Morph OPEN [open_size]": opened,
-#         "8 · AR filter [min_ar / max_ar]": labeled,
-#     }
+    # Step 8: AR filter visualization
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(no_small, connectivity=8)
+    rng = np.random.default_rng(42)
+    colors = np.vstack([[0, 0, 0], rng.integers(80, 220, (max(n_labels - 1, 0), 3))])
+    labeled = colors[labels].astype(np.uint8)
+    for lbl in range(1, n_labels):
+        w, h = stats[lbl, cv2.CC_STAT_WIDTH], stats[lbl, cv2.CC_STAT_HEIGHT]
+        if not (min_ar <= w / max(h, 1) <= max_ar):
+            labeled[labels == lbl] = 40
+
+    return {
+        "1 · Adaptive threshold [block/C]": adaptive_image,
+        "2 · Median blur [pre_blur_size]": blurred,
+        "3 · Invert + Dilate [dilate_size_1]": dilated1,
+        "4 · Skeletonize": skeleton,
+        "5 · Dilate skeleton [dilate_size_2]": dilated2,
+        "6 · Smooth [post_blur_size]": smoothed,
+        "7 · Small contours removed [min_area_abs]": no_small,
+        "8 · AR filter [min_ar / max_ar]": labeled,
+    }
 
 
 def extract_reference_card_assets(
@@ -126,16 +156,14 @@ def extract_reference_card_assets(
     image_dir: Path = REFERENCE_IMAGES_DIR,
     output_root: Path = REFERENCE_CARDS_DIR,
     # mask hyperparameters (forwarded to _reference_binary_mask)
-    canny_blur_size: int = 5,
-    canny_low: int = 30,
-    canny_high: int = 100,
-    blob_close_size: int = 40,
-    blur_after: int = 33,
+    adaptive_block_size: int = 11,
+    adaptive_c: int = 4,
+    pre_blur_size: int = 3,
+    dilate_size_1: int = 17,
+    dilate_size_2: int = 17,
+    post_blur_size: int = 33,
+    min_area_abs: int = 100000,
     # extraction hyperparameters
-    min_area_abs: int = 2500,
-    min_area_frac: float = 0.002,
-    close_size: int = 21,
-    open_size: int = 7,
     min_ar: float = 0.3,
     max_ar: float = 2.0,
 ) -> ReferenceExtractionResult:
@@ -156,22 +184,10 @@ def extract_reference_card_assets(
         for f in directory.glob("*.jpg"):
             f.unlink()
 
-    edges, binary = _reference_binary_mask(
-        gray, canny_blur_size, canny_low, canny_high, blob_close_size, blur_after
+    masks = _reference_binary_mask(
+        gray, adaptive_block_size, adaptive_c, pre_blur_size,
+        dilate_size_1, dilate_size_2, post_blur_size, min_area_abs,
     )
-
-    scale = max(gray.shape) / 4000.0
-    img_area = gray.shape[0] * gray.shape[1]
-    min_area = max(min_area_abs * scale ** 2, min_area_frac * img_area)
-
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    for contour in contours:
-        if cv2.contourArea(contour) < min_area:
-            cv2.drawContours(binary, [contour], -1, 0, thickness=cv2.FILLED)
-
-    # Closing fills card interiors; opening removes residual speckles before labeling.
-    masks = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((close_size, close_size), np.uint8))
-    masks = cv2.morphologyEx(masks, cv2.MORPH_OPEN, np.ones((open_size, open_size), np.uint8))
     n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(masks, connectivity=8)
     if n_labels <= 1:
         return ReferenceExtractionResult(image_name, out_dir, [], [], [])
@@ -263,27 +279,27 @@ def _fit_image_for_axis(img: np.ndarray, ax, renderer) -> np.ndarray:
     return img
 
 
-# def plot_pipeline_steps(
-#     color_rgb: np.ndarray,
-#     pipeline_steps: dict[str, np.ndarray],
-#     title: str = "",
-# ) -> None:
-#     """Display the 3×3 mask-pipeline debug grid."""
-#     import matplotlib.pyplot as plt
+def plot_pipeline_steps(
+    color_rgb: np.ndarray,
+    pipeline_steps: dict[str, np.ndarray],
+    title: str = "",
+) -> None:
+    """Display the 3×3 mask-pipeline debug grid."""
+    import matplotlib.pyplot as plt
 
-#     panels = [("0 · Original", color_rgb), *pipeline_steps.items()]
-#     fig, axes = plt.subplots(3, 3, figsize=(15, 11))
-#     for ax in axes.flat:
-#         ax.axis("off")
-#     fig.canvas.draw()
-#     renderer = fig.canvas.get_renderer()
-#     for ax, (lbl, img) in zip(axes.flat, panels):
-#         display = _fit_image_for_axis(img, ax, renderer)
-#         ax.imshow(display, cmap="gray" if display.ndim == 2 else None)
-#         ax.set_title(lbl, fontsize=9)
-#     plt.suptitle(title, fontsize=12)
-#     plt.tight_layout()
-#     plt.show()
+    panels = [("0 · Original", color_rgb), *pipeline_steps.items()]
+    fig, axes = plt.subplots(3, 3, figsize=(15, 11))
+    for ax in axes.flat:
+        ax.axis("off")
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    for ax, (lbl, img) in zip(axes.flat, panels):
+        display = _fit_image_for_axis(img, ax, renderer)
+        ax.imshow(display, cmap="gray" if display.ndim == 2 else None)
+        ax.set_title(lbl, fontsize=9)
+    plt.suptitle(title, fontsize=12)
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_crop_preview(
@@ -291,49 +307,99 @@ def plot_crop_preview(
     title: str = "",
     n: int = 4,
 ) -> None:
-    """Display component / mask / mask-outlined-crop grid for the first n cards."""
+    """Display two composite views then a per-card grid for the first n cards."""
     import matplotlib.pyplot as plt
+    from matplotlib.colors import hsv_to_rgb
 
-    rows = []
-    for component_path, mask_path, crop_path in zip(
-        result.components[:n], result.masks[:n], result.crops[:n]
-    ):
-        component = cv2.imread(str(component_path), cv2.IMREAD_GRAYSCALE)
-        mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-        crop_bgr = cv2.imread(str(crop_path), cv2.IMREAD_COLOR)
-        if component is None or mask is None or crop_bgr is None:
-            raise FileNotFoundError(
-                f"Could not read one of: {component_path.name}, {mask_path.name}, {crop_path.name}"
-            )
-        crop = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
-        mask_rs = (
-            cv2.resize(mask, (crop.shape[1], crop.shape[0]), interpolation=cv2.INTER_NEAREST)
-            if mask.shape != crop.shape[:2]
-            else mask
-        )
-        mask_bin = np.where(mask_rs > 0, 255, 0).astype(np.uint8)
-        contours, _ = cv2.findContours(mask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        crop_outlined = crop.copy()
-        if contours:
-            cv2.drawContours(crop_outlined, contours, -1, (255, 0, 255), 2, lineType=cv2.LINE_AA)
-        rows.append((component, mask, crop_outlined, component_path.name, mask_path.name, crop_path.name))
-
-    if not rows:
+    if not result.components:
         raise RuntimeError("No reference-card assets were generated.")
 
-    fig, axes = plt.subplots(len(rows), 3, figsize=(10, 3 * len(rows)))
-    axes = np.atleast_2d(axes)
-    for ax in axes.flat:
-        ax.axis("off")
+    _, color_rgb = load_reference_image(result.image_name)
+    h, w = color_rgb.shape[:2]
+    n_cards = len(result.components)
+
+    # Build panel 1: final selected component mask (pre-closure), color-coded per card.
+    final_skeleton_colored = np.zeros((h, w, 3), dtype=np.uint8)
+    # Build panel 2: reference image with semi-transparent closed-mask fills
+    fill_layer = np.zeros_like(color_rgb)
+    closed_union = np.zeros((h, w), dtype=bool)
+    hull_entries: list[tuple[np.ndarray, np.ndarray]] = []
+    for i, comp_path in enumerate(result.components):
+        comp = cv2.imread(str(comp_path), cv2.IMREAD_GRAYSCALE)
+        if comp is None:
+            continue
+        rgb = (np.array(hsv_to_rgb([i / max(n_cards, 1), 0.85, 0.95])) * 255).astype(np.uint8)
+        final_skeleton_colored[comp > 0] = rgb
+        contours, _ = cv2.findContours(comp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            continue
+        hull = cv2.convexHull(np.vstack(contours))
+        closed_mask = np.zeros_like(comp)
+        cv2.fillPoly(closed_mask, [hull], 255)
+        closed_region = closed_mask > 0
+        fill_layer[closed_region] = rgb
+        closed_union |= closed_region
+        hull_entries.append((hull, rgb))
+
+    overlay = color_rgb.copy()
+    alpha = 0.1
+    overlay[closed_union] = (
+        (1.0 - alpha) * color_rgb[closed_union] + alpha * fill_layer[closed_union]
+    ).astype(np.uint8)
+    for hull, rgb in hull_entries:
+        cv2.polylines(overlay, [hull], True, rgb.tolist(), 8, lineType=cv2.LINE_AA)
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
-    for i, (comp, msk, crop_out, comp_name, msk_name, crop_name) in enumerate(rows):
-        axes[i, 0].imshow(_fit_image_for_axis(comp, axes[i, 0], renderer), cmap="gray")
-        axes[i, 0].set_title(comp_name)
-        axes[i, 1].imshow(_fit_image_for_axis(msk, axes[i, 1], renderer), cmap="gray")
-        axes[i, 1].set_title(msk_name)
-        axes[i, 2].imshow(_fit_image_for_axis(crop_out, axes[i, 2], renderer))
-        axes[i, 2].set_title(f"{crop_name} + mask outline")
-    plt.suptitle(f"{title} · mask outline overlay", y=1.01)
+    axes[0].imshow(_fit_image_for_axis(final_skeleton_colored, axes[0], renderer))
+    axes[0].set_title("Final skeletonized mask (colored)")
+    axes[0].axis("off")
+    axes[1].imshow(_fit_image_for_axis(overlay, axes[1], renderer))
+    axes[1].set_title("Reference image + closed-mask overlay")
+    axes[1].axis("off")
+    plt.suptitle(title, fontsize=12)
     plt.tight_layout()
     plt.show()
+
+    # # Per-card grid for the first n cards
+    # rows = []
+    # for component_path, mask_path, crop_path in zip(
+    #     result.components[:n], result.masks[:n], result.crops[:n]
+    # ):
+    #     component = cv2.imread(str(component_path), cv2.IMREAD_GRAYSCALE)
+    #     mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+    #     crop_bgr = cv2.imread(str(crop_path), cv2.IMREAD_COLOR)
+    #     if component is None or mask is None or crop_bgr is None:
+    #         raise FileNotFoundError(
+    #             f"Could not read one of: {component_path.name}, {mask_path.name}, {crop_path.name}"
+    #         )
+    #     crop = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+    #     mask_rs = (
+    #         cv2.resize(mask, (crop.shape[1], crop.shape[0]), interpolation=cv2.INTER_NEAREST)
+    #         if mask.shape != crop.shape[:2]
+    #         else mask
+    #     )
+    #     mask_bin = np.where(mask_rs > 0, 255, 0).astype(np.uint8)
+    #     contours, _ = cv2.findContours(mask_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    #     crop_outlined = crop.copy()
+    #     if contours:
+    #         cv2.drawContours(crop_outlined, contours, -1, (255, 0, 255), 2, lineType=cv2.LINE_AA)
+    #     rows.append((component, mask, crop_outlined, component_path.name, mask_path.name, crop_path.name))
+
+    # fig, axes = plt.subplots(len(rows), 3, figsize=(10, 3 * len(rows)))
+    # axes = np.atleast_2d(axes)
+    # for ax in axes.flat:
+    #     ax.axis("off")
+    # fig.canvas.draw()
+    # renderer = fig.canvas.get_renderer()
+    # for i, (comp, msk, crop_out, comp_name, msk_name, crop_name) in enumerate(rows):
+    #     axes[i, 0].imshow(_fit_image_for_axis(comp, axes[i, 0], renderer), cmap="gray")
+    #     axes[i, 0].set_title(comp_name)
+    #     axes[i, 1].imshow(_fit_image_for_axis(msk, axes[i, 1], renderer), cmap="gray")
+    #     axes[i, 1].set_title(msk_name)
+    #     axes[i, 2].imshow(_fit_image_for_axis(crop_out, axes[i, 2], renderer))
+    #     axes[i, 2].set_title(f"{crop_name} + mask outline")
+    # plt.suptitle(f"{title} · per-card preview (first {n})", y=1.01)
+    # plt.tight_layout()
+    # plt.show()
