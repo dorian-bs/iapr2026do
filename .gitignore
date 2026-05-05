@@ -1,5 +1,6 @@
 data/
 __pycache__/
+.venv/
 
 # ignore generated jpg files
 project/aug/*.jpg
@@ -15,3 +16,4 @@ project/L1000768/**/*.jpg
 
 # ignore dorian's files
 projodo/
+*.DS_Store
