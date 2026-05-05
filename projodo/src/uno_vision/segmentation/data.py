@@ -1,3 +1,5 @@
+"""Datasets and file collection helpers for training the card segmenter."""
+
 from __future__ import annotations
 
 import random
@@ -19,6 +21,8 @@ DEFAULT_REFERENCE_TAGS = ("L1000765", "L1000766", "L1000767", "L1000768")
 
 
 def load_aligned_mask(mask_path: str | Path, img_h: int, img_w: int) -> np.ndarray:
+    """Crop a closed component mask to its foreground box and align it to an image crop."""
+
     closed_mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
     if closed_mask is None:
         raise FileNotFoundError(f"Mask not found or unreadable: {mask_path}")
@@ -40,6 +44,8 @@ def collect_segmentation_pairs(
     augmentations_dir: Path = AUGMENTATIONS_DIR,
     tags: tuple[str, ...] = DEFAULT_REFERENCE_TAGS,
 ) -> list[tuple[str, str]]:
+    """Collect image-mask pairs from reference crops and generated augmentations."""
+
     pairs: list[tuple[str, str]] = []
     for tag in tags:
         crops_dir = reference_cards_dir / tag / "crops"
@@ -63,6 +69,8 @@ def collect_segmentation_pairs(
 
 
 class SegDataset(Dataset):
+    """Torch dataset that returns normalized card crops with binary foreground masks."""
+
     def __init__(self, pairs: list[tuple[str, str]], augment: bool = False, image_size: int = IMG_SIZE):
         self.pairs = pairs
         self.augment = augment
@@ -78,6 +86,8 @@ class SegDataset(Dataset):
         img_h, img_w = img_array.shape[:2]
         mask_aligned = load_aligned_mask(mask_path, img_h, img_w)
         mask = Image.fromarray(mask_aligned)
+
+        # Letterboxing keeps cards geometrically comparable while avoiding stretch artifacts.
         img = letterbox_pil(img, self.image_size, fill=255, interpolation=Image.BILINEAR)
         mask = letterbox_pil(mask, self.image_size, fill=0, interpolation=Image.NEAREST)
 

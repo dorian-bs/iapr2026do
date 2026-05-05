@@ -1,3 +1,5 @@
+"""Image resizing helpers that preserve aspect ratio for model inputs and masks."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +11,8 @@ from PIL import Image
 
 @dataclass(frozen=True)
 class LetterboxMeta:
+    """Geometry needed to map a square letterboxed mask back to the original crop."""
+
     orig_w: int
     orig_h: int
     new_w: int
@@ -19,6 +23,8 @@ class LetterboxMeta:
 
 
 def letterbox_bgr(img_bgr: np.ndarray, size: int = 128, fill: int = 128) -> np.ndarray:
+    """Resize a BGR image into a square canvas without distorting card shape."""
+
     h, w = img_bgr.shape[:2]
     scale = size / max(h, w)
     new_w = max(1, int(w * scale))
@@ -37,6 +43,8 @@ def letterbox_pil(
     fill: int = 255,
     interpolation: int = Image.BILINEAR,
 ) -> Image.Image:
+    """Resize a PIL image into a square canvas while keeping its aspect ratio."""
+
     import torchvision.transforms.functional as TF
 
     w, h = img.size
@@ -56,6 +64,8 @@ def letterbox_pil_with_meta(
     fill: int = 255,
     interpolation: int = Image.BILINEAR,
 ) -> tuple[Image.Image, LetterboxMeta]:
+    """Letterbox a PIL image and return the padding metadata for inverse mapping."""
+
     import torchvision.transforms.functional as TF
 
     w, h = img.size
@@ -74,5 +84,7 @@ def letterbox_pil_with_meta(
 
 
 def unletterbox_mask(mask_lb: np.ndarray, meta: LetterboxMeta) -> np.ndarray:
+    """Remove letterbox padding and resize a predicted mask back to crop coordinates."""
+
     core = mask_lb[meta.top:meta.top + meta.new_h, meta.left:meta.left + meta.new_w]
     return cv2.resize(core, (meta.orig_w, meta.orig_h), interpolation=cv2.INTER_LINEAR)

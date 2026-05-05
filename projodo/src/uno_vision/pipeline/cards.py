@@ -1,3 +1,5 @@
+"""Scene-level card prediction pipeline combining segmentation and classification."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,6 +17,8 @@ from uno_vision.segmentation.inference import load_segmenter, segment_image
 
 @dataclass(frozen=True)
 class CardRegionPrediction:
+    """Predicted label and geometry for one detected card region."""
+
     index: int
     box: tuple[int, int, int, int]
     area: int
@@ -28,9 +32,13 @@ def split_probability_mask(
     high_prob_thresh: float = 0.75,
     card_min_dist: int = 60,
 ) -> tuple[np.ndarray, list[tuple[int, int, int, int, int, int]]]:
+    """Split a foreground probability mask into card-shaped connected regions."""
+
     high_mask = (global_prob >= high_prob_thresh).astype(np.uint8)
     high_mask = cv2.morphologyEx(high_mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
     high_mask = cv2.morphologyEx(high_mask, cv2.MORPH_CLOSE, np.ones((11, 11), np.uint8))
+
+    # Peaks in the distance transform seed watershed splits for touching cards.
     distance = ndi.distance_transform_edt(high_mask)
     coords = peak_local_max(distance, min_distance=card_min_dist, labels=high_mask)
     peak_mask = np.zeros(distance.shape, dtype=bool)
@@ -38,6 +46,7 @@ def split_probability_mask(
         peak_mask[tuple(coords.T)] = True
     markers, _ = ndi.label(peak_mask)
     if markers.max() == 0:
+        # If no peaks survive, connected components still gives a useful coarse fallback.
         markers = ndi.label(high_mask)[0]
     ws_labels = watershed(-distance, markers, mask=high_mask)
 
@@ -65,6 +74,8 @@ def classify_regions(
     regions: list[tuple[int, int, int, int, int, int]],
     classifier: CardClassifier,
 ) -> list[CardRegionPrediction]:
+    """Crop each detected card region and classify its UNO color and rank."""
+
     predictions: list[CardRegionPrediction] = []
     for index, (x, y, w, h, area, _) in enumerate(regions):
         margin = int(0.08 * max(w, h))
@@ -84,6 +95,8 @@ def predict_cards_in_image(
     high_prob_thresh: float = 0.75,
     card_min_dist: int = 60,
 ) -> tuple[list[CardRegionPrediction], np.ndarray, np.ndarray]:
+    """Run segmentation, region splitting, and card classification for one image."""
+
     img_bgr = cv2.imread(str(image_path))
     if img_bgr is None:
         raise FileNotFoundError(f"Cannot read image: {image_path}")

@@ -1,3 +1,5 @@
+"""Load classifier artifacts and predict UNO card labels from BGR crops."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,6 +19,8 @@ from uno_vision.paths import CLASSIFIER_CLASSES_DIR, CLASSIFIER_MODELS_DIR
 
 @dataclass(frozen=True)
 class CardPrediction:
+    """Classifier output for one cropped card image."""
+
     label: str
     color: str
     rank: str
@@ -24,12 +28,16 @@ class CardPrediction:
 
 @dataclass
 class CardClassifier:
+    """Pair of color/rank classifiers plus their saved class vocabularies."""
+
     color_clf: object
     rank_clf: object
     color_classes: np.ndarray
     rank_classes: np.ndarray
 
     def predict_bgr(self, img_bgr: np.ndarray) -> CardPrediction:
+        """Predict the full UNO label for a single BGR card crop."""
+
         img_lb = letterbox_cv2(img_bgr)
         color_vec = extract_color_features(img_lb).reshape(1, -1)
         rank_vec = extract_rank_features(img_lb).reshape(1, -1)
@@ -44,6 +52,8 @@ def load_card_classifier(
     classifier_dir: Path = CLASSIFIER_MODELS_DIR,
     classes_dir: Path = CLASSIFIER_CLASSES_DIR,
 ) -> CardClassifier:
+    """Load trained classifier models and class arrays from artifact directories."""
+
     color_model_path = classifier_dir / "color_clf.pkl"
     rank_model_path = classifier_dir / "rank_clf.pkl"
     color_classes_path = classes_dir / "color_classes.npy"

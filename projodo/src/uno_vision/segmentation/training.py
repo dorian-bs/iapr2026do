@@ -1,3 +1,5 @@
+"""Training loop for the small card segmentation model."""
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +19,8 @@ from uno_vision.segmentation.model import UNetSmall, dice_loss_from_logits
 
 
 def _iou_sum_from_logits(logits: torch.Tensor, targets: torch.Tensor, thresh: float = 0.5, eps: float = 1e-6) -> torch.Tensor:
+    """Accumulate per-sample IoU values for epoch-level reporting."""
+
     probs = torch.sigmoid(logits.float())
     preds = (probs > thresh).float()
     inter = (preds * targets).sum(dim=(1, 2, 3))
@@ -25,6 +29,8 @@ def _iou_sum_from_logits(logits: torch.Tensor, targets: torch.Tensor, thresh: fl
 
 
 def _resolve_training_logger(logger: logging.Logger | None) -> logging.Logger:
+    """Use a provided logger or create a minimal console logger for scripts."""
+
     if logger is not None:
         return logger
     resolved = logging.getLogger(__name__)
@@ -40,6 +46,8 @@ def _resolve_training_logger(logger: logging.Logger | None) -> logging.Logger:
 
 @dataclass
 class SegmentationTrainingHistory:
+    """Loss, IoU, timing, and artifact path returned after segmenter training."""
+
     train_losses: list[float]
     val_losses: list[float]
     train_ious: list[float]
@@ -58,6 +66,8 @@ def train_segmenter(
     random_state: int = 42,
     output_path: Path = SEGMENTER_MODELS_DIR / "segmenter_unet_small.pth",
 ) -> SegmentationTrainingHistory:
+    """Train the segmenter on allowed reference and augmentation mask pairs."""
+
     training_logger = _resolve_training_logger(logger)
     pairs = pairs or collect_segmentation_pairs()
     if not pairs:
@@ -70,6 +80,8 @@ def train_segmenter(
     use_cuda = device.type == "cuda"
     if use_cuda:
         torch.backends.cudnn.benchmark = True
+
+    # Keep CPU runs simple while allowing parallel prefetching on CUDA machines.
     worker_count = num_workers
     if worker_count is None:
         worker_count = min(4, max(1, (os.cpu_count() or 1) // 2)) if use_cuda else 0
@@ -90,6 +102,8 @@ def train_segmenter(
     bce = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=0.5)
+
+    # Automatic mixed precision is only useful and supported here for CUDA training.
     amp_enabled = mixed_precision and use_cuda
     scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
 
@@ -120,6 +134,7 @@ def train_segmenter(
             optimizer.zero_grad(set_to_none=True)
             with torch.amp.autocast(device_type=device.type, enabled=amp_enabled):
                 logits = model(imgs)
+                # BCE stabilizes pixel decisions while Dice rewards overlap of full card masks.
                 loss = 0.5 * bce(logits, masks) + 0.5 * dice_loss_from_logits(logits, masks)
             scaler.scale(loss).backward()
             scaler.step(optimizer)

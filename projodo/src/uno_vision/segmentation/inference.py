@@ -1,3 +1,5 @@
+"""Inference helpers for loading the segmenter and producing card probability masks."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,6 +20,8 @@ SEGMENTER_IMAGE_SIZE = 256
 
 
 def load_segmenter(model_path: Path | None = None, device: torch.device | None = None) -> tuple[UNetSmall, torch.device, Path]:
+    """Load the trained segmenter artifact and place it on the requested device."""
+
     candidates = [
         model_path,
         SEGMENTER_MODELS_DIR / "segmenter_unet_small.pth",
@@ -34,6 +38,8 @@ def load_segmenter(model_path: Path | None = None, device: torch.device | None =
 
 
 def detect_card_boxes_reference_style(img_bgr: np.ndarray, max_components: int = 24):
+    """Find coarse card-like regions with the same classical pipeline used for references."""
+
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape[:2]
     img_area = h * w
@@ -49,6 +55,8 @@ def detect_card_boxes_reference_style(img_bgr: np.ndarray, max_components: int =
     binary = adaptive.copy()
     if np.mean(binary == 255) > 0.5:
         binary = cv2.bitwise_not(binary)
+
+    # Bridge card edges into components, then thin and re-dilate to reduce texture noise.
     binary = cv2.morphologyEx(binary, cv2.MORPH_DILATE, np.ones((17, 17), np.uint8))
     binary = skeletonize(binary > 0).astype(np.uint8) * 255
     binary = cv2.morphologyEx(binary, cv2.MORPH_DILATE, np.ones((17, 17), np.uint8))
@@ -60,6 +68,7 @@ def detect_card_boxes_reference_style(img_bgr: np.ndarray, max_components: int =
         if cv2.contourArea(contour) < min_area:
             cv2.drawContours(binary, [contour], -1, 0, thickness=cv2.FILLED)
 
+    # Connected components provide broad crops for neural segmentation, not final boxes.
     masks = binary.copy()
     masks = cv2.morphologyEx(masks, cv2.MORPH_CLOSE, np.ones((21, 21), np.uint8))
     masks = cv2.morphologyEx(masks, cv2.MORPH_OPEN, np.ones((7, 7), np.uint8))
@@ -88,11 +97,14 @@ def segment_image(
     device: torch.device,
     max_components: int = 24,
 ) -> tuple[np.ndarray, list[tuple[int, int, int, int]], np.ndarray, np.ndarray]:
+    """Run the segmenter over coarse card crops and merge probabilities into image space."""
+
     img_h, img_w = img_bgr.shape[:2]
     boxes, binary_debug, masks_debug = detect_card_boxes_reference_style(img_bgr, max_components=max_components)
     global_prob = np.zeros((img_h, img_w), dtype=np.float32)
 
     for x, y, box_w, box_h in boxes:
+        # Expand each proposal slightly so border pixels are not clipped before letterboxing.
         margin = int(0.05 * max(box_w, box_h))
         x0 = max(0, x - margin)
         y0 = max(0, y - margin)
@@ -119,6 +131,8 @@ def segment_image(
 
 
 def segment_image_path(image_path: str | Path, model_path: Path | None = None, max_components: int = 24):
+    """Convenience wrapper that reads an image path and returns segmentation debug outputs."""
+
     img_bgr = cv2.imread(str(image_path))
     if img_bgr is None:
         raise FileNotFoundError(f"Cannot read image: {image_path}")

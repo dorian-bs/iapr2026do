@@ -1,3 +1,5 @@
+"""Hand-crafted feature extraction for lightweight UNO card classifiers."""
+
 from __future__ import annotations
 
 import cv2
@@ -14,6 +16,8 @@ SPECIAL_CARDS = {"wild", "draw_4"}
 
 
 def split_card_label(card: str) -> tuple[str, str]:
+    """Split a full UNO label into color and rank targets for separate classifiers."""
+
     if card in SPECIAL_CARDS:
         return SPECIAL_COLOR_TOKEN, card
     if "_" in card:
@@ -22,12 +26,16 @@ def split_card_label(card: str) -> tuple[str, str]:
 
 
 def compose_card_label(color: str, rank: str) -> str:
+    """Rebuild the competition card label from predicted color and rank tokens."""
+
     if rank in SPECIAL_CARDS or color == SPECIAL_COLOR_TOKEN:
         return rank
     return f"{color}_{rank}"
 
 
 def extract_color_features(img_bgr: np.ndarray) -> np.ndarray:
+    """Use HSV histograms over saturated pixels to summarize card color."""
+
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
     mask = (hsv[:, :, 1] > 40).astype(np.uint8) * 255
     h_hist = cv2.calcHist([hsv], [0], mask, [32], [0, 180]).flatten()
@@ -37,6 +45,8 @@ def extract_color_features(img_bgr: np.ndarray) -> np.ndarray:
 
 
 def extract_hog_features(img_bgr: np.ndarray) -> np.ndarray:
+    """Extract HOG texture features from the grayscale card image."""
+
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     return skimage_hog(
         gray,
@@ -48,6 +58,8 @@ def extract_hog_features(img_bgr: np.ndarray) -> np.ndarray:
 
 
 def extract_fourier_features(img_bgr: np.ndarray, n_coeffs: int = FOURIER_COEFFS) -> np.ndarray:
+    """Describe the dominant symbol contour with normalized Fourier magnitudes."""
+
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (3, 3), 0)
     _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
@@ -58,6 +70,8 @@ def extract_fourier_features(img_bgr: np.ndarray, n_coeffs: int = FOURIER_COEFFS
     contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not contours:
         return np.zeros(n_coeffs, dtype=np.float32)
+
+    # The largest contour usually belongs to the UNO symbol or number after border cleanup.
     cnt = max(contours, key=cv2.contourArea)
     pts = cnt[:, 0, :].astype(np.float32)
     if len(pts) < max(10, n_coeffs + 1):
@@ -73,12 +87,16 @@ def extract_fourier_features(img_bgr: np.ndarray, n_coeffs: int = FOURIER_COEFFS
 
 
 def extract_rank_features(img_bgr: np.ndarray) -> np.ndarray:
+    """Combine texture and contour descriptors for rank/symbol classification."""
+
     hog_vec = extract_hog_features(img_bgr)
     fourier_vec = extract_fourier_features(img_bgr)
     return np.concatenate([hog_vec, fourier_vec])
 
 
 def extract_features_from_path(path: str, size: int = IMG_SIZE) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Read an image path and return color features, rank features, and model input."""
+
     img_bgr = cv2.imread(path)
     if img_bgr is None:
         raise FileNotFoundError(f"Cannot read image: {path}")
@@ -87,6 +105,8 @@ def extract_features_from_path(path: str, size: int = IMG_SIZE) -> tuple[np.ndar
 
 
 letterbox_cv2 = letterbox_bgr
+
+# Backward-compatible aliases kept for notebooks and older scripts.
 extract_color_feat = extract_color_features
 extract_hog_feat = extract_hog_features
 extract_fourier_feat = extract_fourier_features

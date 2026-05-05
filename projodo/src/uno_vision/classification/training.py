@@ -1,3 +1,5 @@
+"""Training utilities for the lightweight color and rank card classifiers."""
+
 from __future__ import annotations
 
 import csv
@@ -26,6 +28,8 @@ from uno_vision.paths import AUGMENTATIONS_DIR, CLASSIFIER_CLASSES_DIR, CLASSIFI
 
 
 def _resolve_training_logger(logger: logging.Logger | None) -> logging.Logger:
+    """Use a provided logger or create a minimal console logger for scripts."""
+
     if logger is not None:
         return logger
     resolved = logging.getLogger(__name__)
@@ -41,6 +45,8 @@ def _resolve_training_logger(logger: logging.Logger | None) -> logging.Logger:
 
 @dataclass
 class ClassifierTrainingResult:
+    """Trained classifiers, encoders, evaluation metrics, and timing details."""
+
     color_clf: ExtraTreesClassifier
     rank_clf: ExtraTreesClassifier
     label_encoder: LabelEncoder
@@ -55,6 +61,8 @@ def collect_classifier_samples(
     reference_cards_dir: Path = REFERENCE_CARDS_DIR,
     augmentations_dir: Path = AUGMENTATIONS_DIR,
 ) -> list[tuple[str, str]]:
+    """Collect labeled crop paths from reference assets and generated augmentations."""
+
     samples: list[tuple[str, str]] = []
     reference_csv = reference_cards_dir / "labels.csv"
     augmentation_csv = augmentations_dir / "labels.csv"
@@ -84,6 +92,8 @@ def collect_classifier_samples(
 
 
 def _build_label_encoders(labels: list[str]):
+    """Fit full-label, color, and rank encoders for the two-stage classifier."""
+
     label_encoder = LabelEncoder()
     encoded = label_encoder.fit_transform(labels)
     color_labels, rank_labels = zip(*(split_card_label(label) for label in labels))
@@ -96,6 +106,8 @@ def _build_label_encoders(labels: list[str]):
 
 
 def _extract_feature_matrices(paths: list[str]):
+    """Read crop paths and build separate feature matrices for color and rank."""
+
     color_feats = []
     rank_feats = []
     letterboxed_images = []
@@ -111,6 +123,8 @@ def _extract_feature_matrices(paths: list[str]):
 
 
 def _oversample_features(features: np.ndarray, labels: np.ndarray, random_state: int):
+    """Balance class counts with bootstrap samples inside the training split."""
+
     counts = np.bincount(labels)
     max_count = int(counts.max())
     feature_parts = [features]
@@ -133,6 +147,8 @@ def _oversample_features(features: np.ndarray, labels: np.ndarray, random_state:
 
 
 def decode_predictions(pred_c, pred_r, color_encoder, rank_encoder, pair_to_full_label):
+    """Combine predicted color and rank ids into valid full-card labels when possible."""
+
     rank_to_full_labels: dict[str, set[str]] = {}
     for (_, rank), full in pair_to_full_label.items():
         rank_to_full_labels.setdefault(rank, set()).add(full)
@@ -157,6 +173,8 @@ def train_classifiers(
     logger: logging.Logger | None = None,
     random_state: int = 42,
 ) -> ClassifierTrainingResult:
+    """Train color and rank ExtraTrees classifiers from allowed card crop samples."""
+
     training_logger = _resolve_training_logger(logger)
     total_start = perf_counter()
     samples = samples or collect_classifier_samples()
@@ -189,6 +207,7 @@ def train_classifiers(
     y_full_va = encoded[val_idx]
     training_logger.info("Classifier split complete | train_samples=%d | val_samples=%d", len(train_idx), len(val_idx))
 
+    # Color recognition should be invariant to card orientation, so rotate training crops.
     rot_flags = [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]
     aug_col = []
     aug_y_col = []
@@ -224,6 +243,7 @@ def train_classifiers(
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=(128, 128, 128),
         )
+        # Small affine and lighting changes make symbol features less brittle.
         alpha = float(rng.uniform(0.9, 1.1))
         beta = int(rng.integers(-12, 13))
         photometric = cv2.convertScaleAbs(warped, alpha=alpha, beta=beta)
@@ -318,6 +338,8 @@ def save_classifier_artifacts(
     classifier_dir: Path = CLASSIFIER_MODELS_DIR,
     classes_dir: Path = CLASSIFIER_CLASSES_DIR,
 ) -> None:
+    """Persist trained classifier models and class vocabularies for inference."""
+
     classifier_dir.mkdir(parents=True, exist_ok=True)
     classes_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(result.color_clf, classifier_dir / "color_clf.pkl")

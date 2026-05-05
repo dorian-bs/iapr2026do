@@ -1,3 +1,5 @@
+"""Generate synthetic card crop and mask augmentations from allowed reference assets."""
+
 from __future__ import annotations
 
 import csv
@@ -14,6 +16,8 @@ DEFAULT_SOURCE_TAGS = ("L1000765", "L1000766", "L1000767", "L1000768")
 
 
 def load_reference_labels(reference_csv_path: Path = REFERENCE_CARDS_DIR / "labels.csv") -> dict[str, str]:
+    """Read reference crop labels keyed by generated image id."""
+
     labels: dict[str, str] = {}
     with reference_csv_path.open("r", newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
@@ -25,6 +29,8 @@ def load_reference_labels(reference_csv_path: Path = REFERENCE_CARDS_DIR / "labe
 
 
 def load_aligned_mask(closed_dir: Path, crop_idx: int, target_h: int, target_w: int) -> np.ndarray:
+    """Load a closed mask, crop it to foreground, and resize it to match the crop."""
+
     mask_path = closed_dir / f"closed_component_{crop_idx}.jpg"
     closed_mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
     if closed_mask is None:
@@ -37,6 +43,8 @@ def load_aligned_mask(closed_dir: Path, crop_idx: int, target_h: int, target_w: 
 
 
 def make_pattern_variants(h: int, w: int, rng: np.random.Generator | None = None) -> dict[str, np.ndarray]:
+    """Create simple procedural backgrounds for foreground-preserving augmentations."""
+
     rng = rng or np.random.default_rng()
     patterns: dict[str, np.ndarray] = {}
     stripe_w = 12
@@ -64,6 +72,8 @@ def make_pattern_variants(h: int, w: int, rng: np.random.Generator | None = None
 
 
 def apply_pattern_background(img_bgr: np.ndarray, mask_fg: np.ndarray, pattern_bgr: np.ndarray) -> np.ndarray:
+    """Composite a card foreground over a generated BGR background pattern."""
+
     out = pattern_bgr.copy()
     out[mask_fg] = img_bgr[mask_fg]
     return out
@@ -74,6 +84,8 @@ def crop_image_augmentations(
     mask_fg: np.ndarray | None,
     rng: np.random.Generator,
 ) -> list[tuple[str, np.ndarray]]:
+    """Create geometric, photometric, occlusion, and background variants of one crop."""
+
     h, w = img_bgr.shape[:2]
     aug_images: list[tuple[str, np.ndarray]] = []
     center = (w // 2, h // 2)
@@ -115,6 +127,7 @@ def crop_image_augmentations(
         aug_images.append((f"white_rectangle_{rect_i}", cover))
 
     if mask_fg is not None:
+        # Pattern backgrounds exercise the segmenter without introducing external images.
         for name, pattern in make_pattern_variants(h, w, rng).items():
             aug_images.append((name, apply_pattern_background(img_bgr, mask_fg, pattern)))
 
@@ -136,6 +149,8 @@ def generate_augmentation_images(
     augmentations_dir: Path = AUGMENTATIONS_DIR,
     seed: int = 42,
 ) -> int:
+    """Generate augmented crop images and their labels CSV."""
+
     rng = np.random.default_rng(seed)
     aug_dir = augmentations_dir / "images"
     aug_dir.mkdir(parents=True, exist_ok=True)
@@ -175,6 +190,8 @@ def generate_augmentation_images(
 
 
 def load_binary_mask(closed_dir: Path, crop_idx: int) -> np.ndarray:
+    """Load a closed component mask as a binary uint8 image."""
+
     mask_path = closed_dir / f"closed_component_{crop_idx}.jpg"
     mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
     if mask is None:
@@ -183,12 +200,16 @@ def load_binary_mask(closed_dir: Path, crop_idx: int) -> np.ndarray:
 
 
 def rotate_mask(mask: np.ndarray, angle: float) -> np.ndarray:
+    """Rotate a binary mask with nearest-neighbor interpolation to preserve labels."""
+
     h, w = mask.shape[:2]
     matrix = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
     return cv2.warpAffine(mask, matrix, (w, h), flags=cv2.INTER_NEAREST, borderValue=0)
 
 
 def mask_augmentations(mask: np.ndarray, rng: np.random.Generator) -> list[tuple[str, np.ndarray]]:
+    """Mirror image augmentations for masks so segmentation pairs stay aligned."""
+
     h, w = mask.shape[:2]
     aug_masks: list[tuple[str, np.ndarray]] = [("rot_45", rotate_mask(mask, 45))]
     aug_masks.append(("flip_vertical", cv2.flip(mask, 0)))
@@ -242,6 +263,8 @@ def generate_augmentation_masks(
     augmentations_dir: Path = AUGMENTATIONS_DIR,
     seed: int = 42,
 ) -> int:
+    """Generate augmented binary masks that correspond to the augmented crop images."""
+
     rng = np.random.default_rng(seed)
     aug_masks_dir = augmentations_dir / "masks"
     aug_masks_dir.mkdir(parents=True, exist_ok=True)
@@ -265,6 +288,8 @@ def generate_augmentation_masks(
 
 
 def generate_augmentations(seed: int = 42) -> tuple[int, int]:
+    """Generate both image and mask augmentations with the same random seed."""
+
     image_count = generate_augmentation_images(seed=seed)
     mask_count = generate_augmentation_masks(seed=seed)
     return image_count, mask_count

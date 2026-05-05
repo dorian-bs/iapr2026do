@@ -1,4 +1,4 @@
-"""UNO card classification utilities."""
+"""UNO card classification models, feature extraction, and inference helpers."""
 
 from uno_vision.classification.predict import CardClassifier, CardPrediction, load_card_classifier
 

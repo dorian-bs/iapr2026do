@@ -1,3 +1,5 @@
+"""Small U-Net segmentation model trained from project-generated card masks."""
+
 from __future__ import annotations
 
 import torch
@@ -5,6 +7,8 @@ import torch.nn as nn
 
 
 class DoubleConv(nn.Module):
+    """Two convolution blocks used throughout the U-Net encoder and decoder."""
+
     def __init__(self, in_ch: int, out_ch: int):
         super().__init__()
         self.net = nn.Sequential(
@@ -21,6 +25,8 @@ class DoubleConv(nn.Module):
 
 
 class UNetSmall(nn.Module):
+    """Compact U-Net for card foreground segmentation under the 12M parameter cap."""
+
     def __init__(self):
         super().__init__()
         self.enc1 = DoubleConv(3, 32)
@@ -37,6 +43,8 @@ class UNetSmall(nn.Module):
         self.out = nn.Conv2d(32, 1, kernel_size=1)
 
     def forward(self, x):
+        """Run encoder-decoder segmentation with skip connections."""
+
         e1 = self.enc1(x)
         e2 = self.enc2(self.pool(e1))
         e3 = self.enc3(self.pool(e2))
@@ -54,6 +62,8 @@ class UNetSmall(nn.Module):
 
 
 def dice_loss_from_logits(logits, targets, eps: float = 1e-6):
+    """Compute soft Dice loss directly from raw segmentation logits."""
+
     probs = torch.sigmoid(logits.float()).view(-1)
     targets = targets.float().view(-1)
     intersection = (probs * targets).sum()
@@ -62,6 +72,8 @@ def dice_loss_from_logits(logits, targets, eps: float = 1e-6):
 
 
 def iou_score_from_logits(logits, targets, thresh: float = 0.5, eps: float = 1e-6) -> float:
+    """Compute mean IoU after thresholding sigmoid probabilities."""
+
     probs = torch.sigmoid(logits.float())
     targets = targets.float()
     preds = (probs > thresh).float()

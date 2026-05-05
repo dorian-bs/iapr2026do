@@ -225,7 +225,18 @@ verify R1-R4 compliance and test-data isolation.
 - Do not modify official raw data except to copy it into the project layout when needed.
 - Keep code style consistent with the existing package.
 - Prefer simple, inspectable classical/image-processing baselines before adding heavier models.
-- Add comments only when they clarify non-obvious logic.
+- Add comments and docstrings only when they clarify intent, data flow, compliance-relevant
+  constraints, or non-obvious image-processing/modeling choices.
+- Every reusable Python source file in `projodo/src/uno_vision/` should start with a short
+  module docstring that explains the file's role in the project.
+- Public functions, classes, and dataclasses should have concise docstrings that describe
+  what they return or coordinate, especially for training, inference, data generation, and
+  feature extraction code.
+- Prefer short comments before complex blocks over inline narration. Good comments explain
+  why a threshold, morphology step, augmentation, split, or artifact path exists; avoid
+  comments that merely restate the next line of code.
+- Keep comments current when changing behavior. Remove or revise stale comments in the same
+  edit that changes the code they describe.
 - Do not commit, reset, or discard changes unless the student explicitly asks.
 
 ---

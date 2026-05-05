@@ -1,4 +1,4 @@
-"""Card and scene segmentation utilities."""
+"""Segmentation models and helpers for locating cards in scene images."""
 
 from uno_vision.segmentation.model import UNetSmall
 
