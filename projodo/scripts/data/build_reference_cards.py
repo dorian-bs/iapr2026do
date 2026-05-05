@@ -10,7 +10,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from uno_vision.data.reference_cards import extract_reference_card_assets
+from uno_vision.data.reference_cards_base import extract_reference_card_assets
 
 
 def main() -> int:

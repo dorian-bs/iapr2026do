@@ -189,14 +189,11 @@ def generate_augmentation_images(
     return len(aug_rows)
 
 
-def load_binary_mask(closed_dir: Path, crop_idx: int) -> np.ndarray:
-    """Load a closed component mask as a binary uint8 image."""
+def load_binary_mask(closed_dir: Path, crop_idx: int, target_h: int, target_w: int) -> np.ndarray:
+    """Load a closed component mask and align it to the corresponding crop canvas."""
 
-    mask_path = closed_dir / f"closed_component_{crop_idx}.jpg"
-    mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-    if mask is None:
-        raise FileNotFoundError(f"Mask not found: {mask_path}")
-    return (mask > 127).astype(np.uint8) * 255
+    aligned_bool = load_aligned_mask(closed_dir, crop_idx, target_h, target_w)
+    return aligned_bool.astype(np.uint8) * 255
 
 
 def rotate_mask(mask: np.ndarray, angle: float) -> np.ndarray:
@@ -214,7 +211,9 @@ def mask_augmentations(mask: np.ndarray, rng: np.random.Generator) -> list[tuple
     aug_masks: list[tuple[str, np.ndarray]] = [("rot_45", rotate_mask(mask, 45))]
     aug_masks.append(("flip_vertical", cv2.flip(mask, 0)))
     aug_masks.append(("flip_horizontal", cv2.flip(mask, 1)))
+    # Consume the same RNG draws as image hue shifts so later random occlusions align.
     for i in range(3):
+        _ = int(rng.choice([-12, -8, -4, 4, 8, 12]))
         aug_masks.append((f"hue_copy_{i + 1}", mask.copy()))
     aug_masks.extend([
         ("dimmed_copy", mask.copy()),
@@ -272,6 +271,7 @@ def generate_augmentation_masks(
     saved_masks = 0
     for source_tag in source_tags:
         closed_dir = reference_cards_dir / source_tag / "masks"
+        crops_dir = reference_cards_dir / source_tag / "crops"
         if not closed_dir.is_dir():
             continue
         for closed_file in sorted(closed_dir.glob("closed_component_*.jpg")):
@@ -279,7 +279,12 @@ def generate_augmentation_masks(
             base_id = f"{source_tag}_crop_{crop_idx}"
             if base_id not in ref_labels:
                 continue
-            mask = load_binary_mask(closed_dir, crop_idx)
+            crop_path = crops_dir / f"crop_{crop_idx}.jpg"
+            crop_img = cv2.imread(str(crop_path), cv2.IMREAD_COLOR)
+            if crop_img is None:
+                continue
+            crop_h, crop_w = crop_img.shape[:2]
+            mask = load_binary_mask(closed_dir, crop_idx, crop_h, crop_w)
             for aug_i, (_, aug_mask) in enumerate(mask_augmentations(mask, rng), start=1):
                 image_id = f"{base_id}_aug{aug_i}"
                 cv2.imwrite(str(aug_masks_dir / f"{image_id}.jpg"), aug_mask)

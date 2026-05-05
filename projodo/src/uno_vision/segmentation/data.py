@@ -39,6 +39,17 @@ def load_aligned_mask(mask_path: str | Path, img_h: int, img_w: int) -> np.ndarr
     return mask_crop
 
 
+def load_canvas_mask(mask_path: str | Path, img_h: int, img_w: int) -> np.ndarray:
+    """Load an already aligned mask and preserve its full canvas geometry."""
+
+    mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+    if mask is None:
+        raise FileNotFoundError(f"Mask not found or unreadable: {mask_path}")
+    if mask.shape[:2] != (img_h, img_w):
+        mask = cv2.resize(mask, (img_w, img_h), interpolation=cv2.INTER_NEAREST)
+    return mask
+
+
 def collect_segmentation_pairs(
     reference_cards_dir: Path = REFERENCE_CARDS_DIR,
     augmentations_dir: Path = AUGMENTATIONS_DIR,
@@ -81,10 +92,19 @@ class SegDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path, mask_path = self.pairs[idx]
+        mask_path_obj = Path(mask_path)
         img = Image.open(img_path).convert("RGB")
         img_array = np.array(img)
         img_h, img_w = img_array.shape[:2]
-        mask_aligned = load_aligned_mask(mask_path, img_h, img_w)
+
+        # Augmentation masks are already generated in crop canvas coordinates.
+        # Reference masks are stored in source-image coordinates and need bbox alignment.
+        is_augmented_mask = "_aug" in mask_path_obj.stem or "augmentations" in mask_path_obj.parts
+        if is_augmented_mask:
+            mask_aligned = load_canvas_mask(mask_path, img_h, img_w)
+        else:
+            mask_aligned = load_aligned_mask(mask_path, img_h, img_w)
+
         mask = Image.fromarray(mask_aligned)
 
         # Letterboxing keeps cards geometrically comparable while avoiding stretch artifacts.
