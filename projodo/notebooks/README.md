@@ -4,7 +4,8 @@ These notebooks are kept for exploration, visual diagnostics, and experiment his
 
 ```text
 reference_cards.ipynb     reference-card extraction exploration
-augmentations.ipynb       augmentation exploration and generation history
+augmentations.ipynb       merged augmentation + synthetic snapshot exploration
+augmented_game_snapshots.ipynb  legacy compatibility stub (merged into augmentations.ipynb)
 train_segmenter.ipynb     segmentation model training history
 train_classifier.ipynb    color/rank classifier training history
 test_classifier.ipynb     segmentation and classifier diagnostics

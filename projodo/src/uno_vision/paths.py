@@ -28,6 +28,7 @@ SAMPLE_SUBMISSION_PATH = RAW_DATA_DIR / "sample_submission.csv"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 REFERENCE_CARDS_DIR = PROCESSED_DATA_DIR / "reference_cards"
 AUGMENTATIONS_DIR = PROCESSED_DATA_DIR / "augmentations"
+GAME_SNAPSHOTS_DIR = PROCESSED_DATA_DIR / "game_snapshots"
 
 # Runtime artifacts created by training, inference, and evaluation scripts.
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
