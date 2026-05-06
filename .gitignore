@@ -1,2 +1,19 @@
 data/
 __pycache__/
+.venv/
+
+# ignore generated jpg files
+project/aug/*.jpg
+project/aug_masks/*.jpg
+project/L1000765/**/*.jpg
+project/L1000766/**/*.jpg
+project/L1000767/**/*.jpg
+project/L1000768/**/*.jpg
+
+# ignore classifiers
+*.pkl
+
+
+# ignore dorian's files
+projodo/
+*.DS_Store
