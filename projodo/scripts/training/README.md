@@ -20,5 +20,6 @@ Scene training writes JSON summaries and optional plots into `artifacts/reports/
 Useful flags:
 
 - `--warm-start artifacts/models/segmenter/segmenter_unet_small.pth` to fine-tune from an existing checkpoint.
+- `--scenes-dir data/processed/game_snapshots` to override the default snapshot pair location.
 - `--no-plots` to skip figure generation when running remotely.
 - `--skip-diagnostics` to train only and avoid the post-training validation report.

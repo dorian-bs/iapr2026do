@@ -14,6 +14,8 @@ data/processed/reference_cards/L1000765/**/*.jpg
 data/processed/reference_cards/L1000766/**/*.jpg
 data/processed/reference_cards/L1000767/**/*.jpg
 data/processed/reference_cards/L1000768/**/*.jpg
+data/processed/game_snapshots/**/*.jpg
+data/processed/game_snapshots/**/*.json
 
 data/interim/
 data/cache/

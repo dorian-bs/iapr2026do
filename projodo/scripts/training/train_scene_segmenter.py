@@ -13,7 +13,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from uno_vision.paths import REPORTS_DIR, SEGMENTER_MODELS_DIR
+PROJECT_ROOT = ROOT
+DEFAULT_SCENES_DIR = PROJECT_ROOT / "data" / "processed" / "game_snapshots"
+DEFAULT_MODEL_PATH = PROJECT_ROOT / "artifacts" / "models" / "segmenter" / "scene_segmenter_unet_small.pth"
+DEFAULT_REPORTS_DIR = PROJECT_ROOT / "artifacts" / "reports" / "scene_segmenter"
+
 from uno_vision.segmentation_scene.data import SceneSegDataset, collect_scene_pairs
 from uno_vision.segmentation_scene.diagnostics import (
     evaluate_validation_pairs,
@@ -44,11 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--step-size", type=int, default=5)
     parser.add_argument("--gamma", type=float, default=0.5)
     parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--scenes-dir", type=Path, default=DEFAULT_SCENES_DIR)
     parser.add_argument("--warm-start", type=Path, default=None)
     parser.add_argument(
         "--output-path",
         type=Path,
-        default=SEGMENTER_MODELS_DIR / "scene_segmenter_unet_small.pth",
+        default=DEFAULT_MODEL_PATH,
     )
     parser.add_argument("--save-last-checkpoint", action="store_true")
     parser.add_argument("--no-mixed-precision", action="store_true")
@@ -58,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-plots", action="store_true")
     parser.add_argument("--preview-samples", type=int, default=6)
     parser.add_argument("--worst-samples", type=int, default=8)
-    parser.add_argument("--reports-dir", type=Path, default=REPORTS_DIR / "scene_segmenter")
+    parser.add_argument("--reports-dir", type=Path, default=DEFAULT_REPORTS_DIR)
     return parser
 
 
@@ -72,7 +77,9 @@ def save_json(path: Path, payload: object) -> None:
 def main() -> int:
     args = build_parser().parse_args()
 
-    pairs = collect_scene_pairs()
+    pairs = collect_scene_pairs(scenes_dir=args.scenes_dir)
+    print(f"Project root: {PROJECT_ROOT}")
+    print(f"Scene snapshots directory: {args.scenes_dir}")
     print(f"Loaded {len(pairs)} scene image-mask pairs.")
 
     history = train_scene_segmenter(
