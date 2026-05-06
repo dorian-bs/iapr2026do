@@ -10,8 +10,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from uno_vision.segmentation.data import collect_segmentation_pairs
-from uno_vision.segmentation.training import train_segmenter
+from uno_vision.segmentation_card.data import collect_segmentation_pairs
+from uno_vision.segmentation_card.training import train_segmenter
 
 
 def main() -> int:

@@ -14,8 +14,8 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 
 from uno_vision.paths import SEGMENTER_MODELS_DIR
-from uno_vision.segmentation.data import SegDataset, collect_segmentation_pairs
-from uno_vision.segmentation.model import UNetSmall, dice_loss_from_logits
+from uno_vision.segmentation_card.data import SegDataset, collect_segmentation_pairs
+from uno_vision.segmentation_card.model import UNetSmall, dice_loss_from_logits
 
 
 def _iou_sum_from_logits(logits: torch.Tensor, targets: torch.Tensor, thresh: float = 0.5, eps: float = 1e-6) -> torch.Tensor:

@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from uno_vision.classification.predict import CardClassifier, load_card_classifier
-from uno_vision.segmentation.inference import load_segmenter, segment_image
+from uno_vision.segmentation_card.inference import load_segmenter, segment_image
 
 
 @dataclass(frozen=True)

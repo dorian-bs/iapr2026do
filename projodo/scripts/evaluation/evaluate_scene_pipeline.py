@@ -17,7 +17,7 @@ if str(SRC) not in sys.path:
 from uno_vision.classification.predict import load_card_classifier
 from uno_vision.paths import REPORTS_DIR, TRAIN_CSV_PATH, TRAIN_IMAGES_DIR
 from uno_vision.pipeline.cards import classify_regions, regions_from_proposal_boxes, split_probability_mask
-from uno_vision.segmentation.inference import load_segmenter, segment_image
+from uno_vision.segmentation_card.inference import load_segmenter, segment_image
 
 
 COLORS = {"r", "g", "b", "y"}

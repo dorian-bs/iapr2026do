@@ -13,7 +13,7 @@ import torchvision.transforms.functional as TF
 
 from uno_vision.image_ops import letterbox_pil_with_meta, unletterbox_mask
 from uno_vision.paths import SEGMENTER_MODELS_DIR
-from uno_vision.segmentation.model import UNetSmall
+from uno_vision.segmentation_card.model import UNetSmall
 
 
 SEGMENTER_IMAGE_SIZE = 256
