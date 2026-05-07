@@ -19,7 +19,7 @@
       357
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -337,7 +337,7 @@
       528
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -613,7 +613,7 @@
       326
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -805,7 +805,7 @@
       373
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -955,7 +955,7 @@
       254
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -1203,7 +1203,7 @@
       269
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -1493,7 +1493,7 @@
       535
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -1643,7 +1643,7 @@
       358
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -1849,7 +1849,7 @@
       441
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -2055,7 +2055,7 @@
       401
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -2233,7 +2233,7 @@
       321
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -2425,7 +2425,7 @@
       423
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -2561,7 +2561,7 @@
       274
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -2795,7 +2795,7 @@
       521
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -3029,7 +3029,7 @@
       316
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -3151,7 +3151,7 @@
       284
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -3385,7 +3385,7 @@
       399
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -3549,7 +3549,7 @@
       247
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -3797,7 +3797,7 @@
       274
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -4087,7 +4087,7 @@
       497
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -4265,7 +4265,7 @@
       511
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -4317,7 +4317,7 @@
       294
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -4551,7 +4551,7 @@
       532
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -4729,7 +4729,7 @@
       250
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -4921,7 +4921,7 @@
       261
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -5085,7 +5085,7 @@
       447
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -5291,7 +5291,7 @@
       474
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -5511,7 +5511,7 @@
       509
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -5745,7 +5745,7 @@
       379
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -5979,7 +5979,7 @@
       397
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -6171,7 +6171,7 @@
       395
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -6405,7 +6405,7 @@
       516
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -6583,7 +6583,7 @@
       429
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -6733,7 +6733,7 @@
       333
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -6897,7 +6897,7 @@
       513
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -7103,7 +7103,7 @@
       334
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -7295,7 +7295,7 @@
       387
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -7473,7 +7473,7 @@
       399
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -7567,7 +7567,7 @@
       439
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -7731,7 +7731,7 @@
       537
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -7965,7 +7965,7 @@
       523
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -8283,7 +8283,7 @@
       330
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -8531,7 +8531,7 @@
       510
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -8695,7 +8695,7 @@
       339
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -8859,7 +8859,7 @@
       437
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -8953,7 +8953,7 @@
       520
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -9215,7 +9215,7 @@
       254
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -9421,7 +9421,7 @@
       248
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -9669,7 +9669,7 @@
       399
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -9917,7 +9917,7 @@
       238
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -10151,7 +10151,7 @@
       522
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -10301,7 +10301,7 @@
       364
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -10549,7 +10549,7 @@
       338
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -10769,7 +10769,7 @@
       511
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -10849,7 +10849,7 @@
       267
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -10985,7 +10985,7 @@
       401
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -11107,7 +11107,7 @@
       538
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -11327,7 +11327,7 @@
       277
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -11533,7 +11533,7 @@
       462
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -11683,7 +11683,7 @@
       423
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -11861,7 +11861,7 @@
       238
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -12109,7 +12109,7 @@
       265
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -12245,7 +12245,7 @@
       278
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -12353,7 +12353,7 @@
       429
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -12559,7 +12559,7 @@
       432
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -12751,7 +12751,7 @@
       548
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -13055,7 +13055,7 @@
       481
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -13247,7 +13247,7 @@
       262
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -13481,7 +13481,7 @@
       506
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -13673,7 +13673,7 @@
       393
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -13865,7 +13865,7 @@
       295
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -14001,7 +14001,7 @@
       268
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -14333,7 +14333,7 @@
       447
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -14651,7 +14651,7 @@
       483
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -14843,7 +14843,7 @@
       496
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -15091,7 +15091,7 @@
       283
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -15297,7 +15297,7 @@
       313
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -15545,7 +15545,7 @@
       283
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -15695,7 +15695,7 @@
       342
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -15901,7 +15901,7 @@
       331
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -16121,7 +16121,7 @@
       368
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -16369,7 +16369,7 @@
       392
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -16575,7 +16575,7 @@
       510
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -16795,7 +16795,7 @@
       429
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -17043,7 +17043,7 @@
       238
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -17235,7 +17235,7 @@
       270
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -17343,7 +17343,7 @@
       264
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -17605,7 +17605,7 @@
       261
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -17713,7 +17713,7 @@
       294
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -17961,7 +17961,7 @@
       411
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -18265,7 +18265,7 @@
       333
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -18471,7 +18471,7 @@
       401
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -18761,7 +18761,7 @@
       539
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -18925,7 +18925,7 @@
       261
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -19159,7 +19159,7 @@
       326
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -19435,7 +19435,7 @@
       328
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -19543,7 +19543,7 @@
       505
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -19763,7 +19763,7 @@
       383
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -19871,7 +19871,7 @@
       359
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -20091,7 +20091,7 @@
       374
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -20339,7 +20339,7 @@
       394
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -20503,7 +20503,7 @@
       264
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -20779,7 +20779,7 @@
       427
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -20985,7 +20985,7 @@
       233
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -21177,7 +21177,7 @@
       451
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -21383,7 +21383,7 @@
       268
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -21659,7 +21659,7 @@
       438
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -21753,7 +21753,7 @@
       398
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -22057,7 +22057,7 @@
       518
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -22235,7 +22235,7 @@
       250
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -22343,7 +22343,7 @@
       399
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -22423,7 +22423,7 @@
       270
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -22531,7 +22531,7 @@
       527
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -22709,7 +22709,7 @@
       462
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -22915,7 +22915,7 @@
       326
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -23093,7 +23093,7 @@
       443
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -23285,7 +23285,7 @@
       392
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -23435,7 +23435,7 @@
       500
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -23599,7 +23599,7 @@
       505
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -23931,7 +23931,7 @@
       533
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -24095,7 +24095,7 @@
       490
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -24357,7 +24357,7 @@
       533
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -24507,7 +24507,7 @@
       261
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -24587,7 +24587,7 @@
       280
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -24807,7 +24807,7 @@
       271
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -25027,7 +25027,7 @@
       283
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -25205,7 +25205,7 @@
       497
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -25425,7 +25425,7 @@
       543
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -25589,7 +25589,7 @@
       267
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -25711,7 +25711,7 @@
       258
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -25945,7 +25945,7 @@
       262
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -26179,7 +26179,7 @@
       378
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -26371,7 +26371,7 @@
       336
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -26563,7 +26563,7 @@
       463
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -26797,7 +26797,7 @@
       262
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -26961,7 +26961,7 @@
       504
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -27181,7 +27181,7 @@
       410
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -27331,7 +27331,7 @@
       253
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -27481,7 +27481,7 @@
       456
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -27673,7 +27673,7 @@
       513
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -27879,7 +27879,7 @@
       254
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -28043,7 +28043,7 @@
       250
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -28305,7 +28305,7 @@
       400
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -28427,7 +28427,7 @@
       324
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -28591,7 +28591,7 @@
       263
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -28867,7 +28867,7 @@
       253
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -29157,7 +29157,7 @@
       506
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -29321,7 +29321,7 @@
       462
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -29625,7 +29625,7 @@
       503
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -29719,7 +29719,7 @@
       446
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -29911,7 +29911,7 @@
       368
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -30131,7 +30131,7 @@
       497
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -30379,7 +30379,7 @@
       385
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -30557,7 +30557,7 @@
       373
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -30819,7 +30819,7 @@
       372
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -31025,7 +31025,7 @@
       517
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -31203,7 +31203,7 @@
       532
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -31549,7 +31549,7 @@
       466
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -31671,7 +31671,7 @@
       510
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -31779,7 +31779,7 @@
       328
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -32027,7 +32027,7 @@
       443
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -32191,7 +32191,7 @@
       407
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -32397,7 +32397,7 @@
       450
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -32533,7 +32533,7 @@
       528
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -32739,7 +32739,7 @@
       421
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -33029,7 +33029,7 @@
       301
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -33291,7 +33291,7 @@
       263
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -33483,7 +33483,7 @@
       534
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -33703,7 +33703,7 @@
       534
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -33881,7 +33881,7 @@
       502
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -34059,7 +34059,7 @@
       343
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -34251,7 +34251,7 @@
       268
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -34373,7 +34373,7 @@
       447
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -34523,7 +34523,7 @@
       501
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -34645,7 +34645,7 @@
       247
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -34893,7 +34893,7 @@
       525
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -35029,7 +35029,7 @@
       402
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -35165,7 +35165,7 @@
       433
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -35413,7 +35413,7 @@
       381
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -35717,7 +35717,7 @@
       277
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -36035,7 +36035,7 @@
       532
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -36185,7 +36185,7 @@
       360
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -36433,7 +36433,7 @@
       278
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -36625,7 +36625,7 @@
       523
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -36803,7 +36803,7 @@
       346
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -37093,7 +37093,7 @@
       395
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -37243,7 +37243,7 @@
       359
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -37519,7 +37519,7 @@
       474
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -37767,7 +37767,7 @@
       448
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -37959,7 +37959,7 @@
       326
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -38193,7 +38193,7 @@
       261
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -38357,7 +38357,7 @@
       263
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -38619,7 +38619,7 @@
       438
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -38727,7 +38727,7 @@
       257
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -38919,7 +38919,7 @@
       404
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -39083,7 +39083,7 @@
       495
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -39317,7 +39317,7 @@
       534
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -39523,7 +39523,7 @@
       242
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -39687,7 +39687,7 @@
       328
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -39865,7 +39865,7 @@
       397
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -40211,7 +40211,7 @@
       372
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -40333,7 +40333,7 @@
       378
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -40595,7 +40595,7 @@
       424
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -40871,7 +40871,7 @@
       267
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -41119,7 +41119,7 @@
       263
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -41339,7 +41339,7 @@
       284
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -41573,7 +41573,7 @@
       281
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -41751,7 +41751,7 @@
       535
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -42027,7 +42027,7 @@
       424
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -42121,7 +42121,7 @@
       257
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -42327,7 +42327,7 @@
       279
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -42631,7 +42631,7 @@
       525
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -42767,7 +42767,7 @@
       392
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -42889,7 +42889,7 @@
       530
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -43053,7 +43053,7 @@
       456
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -43329,7 +43329,7 @@
       515
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -43563,7 +43563,7 @@
       316
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -43727,7 +43727,7 @@
       359
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -43933,7 +43933,7 @@
       368
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -44083,7 +44083,7 @@
       362
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -44289,7 +44289,7 @@
       288
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -44579,7 +44579,7 @@
       456
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -44841,7 +44841,7 @@
       542
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -45033,7 +45033,7 @@
       504
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -45267,7 +45267,7 @@
       243
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -45543,7 +45543,7 @@
       420
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -45679,7 +45679,7 @@
       516
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -45913,7 +45913,7 @@
       421
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -46077,7 +46077,7 @@
       339
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -46311,7 +46311,7 @@
       396
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -46433,7 +46433,7 @@
       447
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -46681,7 +46681,7 @@
       270
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -46901,7 +46901,7 @@
       437
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -47121,7 +47121,7 @@
       522
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -47257,7 +47257,7 @@
       422
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -47449,7 +47449,7 @@
       458
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -47557,7 +47557,7 @@
       312
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -47763,7 +47763,7 @@
       274
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -47927,7 +47927,7 @@
       315
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -48119,7 +48119,7 @@
       271
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -48381,7 +48381,7 @@
       311
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -48489,7 +48489,7 @@
       286
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -48583,7 +48583,7 @@
       408
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -48817,7 +48817,7 @@
       320
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -48953,7 +48953,7 @@
       484
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -49187,7 +49187,7 @@
       274
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -49337,7 +49337,7 @@
       422
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -49543,7 +49543,7 @@
       292
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -49749,7 +49749,7 @@
       399
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -49941,7 +49941,7 @@
       518
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -50105,7 +50105,7 @@
       342
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -50311,7 +50311,7 @@
       247
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -50433,7 +50433,7 @@
       505
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -50611,7 +50611,7 @@
       309
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -50733,7 +50733,7 @@
       287
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -50981,7 +50981,7 @@
       339
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -51173,7 +51173,7 @@
       275
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -51449,7 +51449,7 @@
       262
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -51669,7 +51669,7 @@
       508
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -51819,7 +51819,7 @@
       396
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -52081,7 +52081,7 @@
       351
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -52301,7 +52301,7 @@
       274
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -52479,7 +52479,7 @@
       337
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -52783,7 +52783,7 @@
       257
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -52975,7 +52975,7 @@
       429
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -53279,7 +53279,7 @@
       372
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -53471,7 +53471,7 @@
       458
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -53621,7 +53621,7 @@
       540
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -53897,7 +53897,7 @@
       509
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -54019,7 +54019,7 @@
       326
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -54141,7 +54141,7 @@
       300
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -54319,7 +54319,7 @@
       282
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -54567,7 +54567,7 @@
       507
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -54899,7 +54899,7 @@
       288
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -55091,7 +55091,7 @@
       524
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -55311,7 +55311,7 @@
       264
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -55517,7 +55517,7 @@
       493
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -55737,7 +55737,7 @@
       487
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -55971,7 +55971,7 @@
       274
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -56247,7 +56247,7 @@
       511
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -56565,7 +56565,7 @@
       426
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -56771,7 +56771,7 @@
       253
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -56893,7 +56893,7 @@
       526
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -57127,7 +57127,7 @@
       334
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -57347,7 +57347,7 @@
       522
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -57525,7 +57525,7 @@
       398
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -57703,7 +57703,7 @@
       334
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -57993,7 +57993,7 @@
       451
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -58227,7 +58227,7 @@
       503
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -58335,7 +58335,7 @@
       278
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -58569,7 +58569,7 @@
       312
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -58789,7 +58789,7 @@
       255
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -58939,7 +58939,7 @@
       529
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -59243,7 +59243,7 @@
       440
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -59379,7 +59379,7 @@
       375
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -59473,7 +59473,7 @@
       515
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -59637,7 +59637,7 @@
       278
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -59871,7 +59871,7 @@
       277
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -60021,7 +60021,7 @@
       457
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -60213,7 +60213,7 @@
       311
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -60461,7 +60461,7 @@
       333
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -60737,7 +60737,7 @@
       394
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -60943,7 +60943,7 @@
       512
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -61079,7 +61079,7 @@
       416
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -61215,7 +61215,7 @@
       323
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -61393,7 +61393,7 @@
       530
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -61641,7 +61641,7 @@
       517
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -61833,7 +61833,7 @@
       287
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -61969,7 +61969,7 @@
       519
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -62189,7 +62189,7 @@
       256
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -62423,7 +62423,7 @@
       277
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -62713,7 +62713,7 @@
       515
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -62863,7 +62863,7 @@
       338
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -63069,7 +63069,7 @@
       327
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -63261,7 +63261,7 @@
       297
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -63467,7 +63467,7 @@
       355
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -63617,7 +63617,7 @@
       498
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -63725,7 +63725,7 @@
       270
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -63875,7 +63875,7 @@
       395
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -64137,7 +64137,7 @@
       375
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -64301,7 +64301,7 @@
       534
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -64563,7 +64563,7 @@
       331
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -64699,7 +64699,7 @@
       304
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -64793,7 +64793,7 @@
       346
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -65069,7 +65069,7 @@
       285
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -65275,7 +65275,7 @@
       255
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -65453,7 +65453,7 @@
       392
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -65673,7 +65673,7 @@
       279
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -65865,7 +65865,7 @@
       246
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -66015,7 +66015,7 @@
       377
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -66235,7 +66235,7 @@
       351
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -66525,7 +66525,7 @@
       325
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -66675,7 +66675,7 @@
       439
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -66979,7 +66979,7 @@
       414
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -67283,7 +67283,7 @@
       342
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -67475,7 +67475,7 @@
       239
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -67737,7 +67737,7 @@
       260
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -67901,7 +67901,7 @@
       546
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -68093,7 +68093,7 @@
       425
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -68341,7 +68341,7 @@
       517
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -68589,7 +68589,7 @@
       492
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -68781,7 +68781,7 @@
       497
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -69001,7 +69001,7 @@
       326
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -69235,7 +69235,7 @@
       426
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -69511,7 +69511,7 @@
       255
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -69717,7 +69717,7 @@
       438
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -69937,7 +69937,7 @@
       521
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -70129,7 +70129,7 @@
       263
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -70293,7 +70293,7 @@
       322
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -70639,7 +70639,7 @@
       392
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -70901,7 +70901,7 @@
       517
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -71065,7 +71065,7 @@
       240
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -71243,7 +71243,7 @@
       296
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -71477,7 +71477,7 @@
       506
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -71613,7 +71613,7 @@
       413
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -71889,7 +71889,7 @@
       389
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -72151,7 +72151,7 @@
       524
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -72357,7 +72357,7 @@
       270
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -72591,7 +72591,7 @@
       348
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -72811,7 +72811,7 @@
       290
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -73045,7 +73045,7 @@
       471
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -73307,7 +73307,7 @@
       514
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -73443,7 +73443,7 @@
       353
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -73649,7 +73649,7 @@
       267
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -73869,7 +73869,7 @@
       256
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -74103,7 +74103,7 @@
       434
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -74155,7 +74155,7 @@
       506
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -74361,7 +74361,7 @@
       470
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -74581,7 +74581,7 @@
       378
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -74745,7 +74745,7 @@
       374
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -75049,7 +75049,7 @@
       249
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -75269,7 +75269,7 @@
       248
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -75545,7 +75545,7 @@
       260
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -75765,7 +75765,7 @@
       325
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -75999,7 +75999,7 @@
       339
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -76233,7 +76233,7 @@
       262
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -76383,7 +76383,7 @@
       275
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -76519,7 +76519,7 @@
       373
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -76781,7 +76781,7 @@
       378
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -76959,7 +76959,7 @@
       442
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -77067,7 +77067,7 @@
       287
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -77287,7 +77287,7 @@
       265
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -77395,7 +77395,7 @@
       291
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -77643,7 +77643,7 @@
       507
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -77919,7 +77919,7 @@
       434
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -78111,7 +78111,7 @@
       424
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -78289,7 +78289,7 @@
       433
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -78509,7 +78509,7 @@
       264
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -78687,7 +78687,7 @@
       443
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -78823,7 +78823,7 @@
       510
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -79029,7 +79029,7 @@
       425
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -79319,7 +79319,7 @@
       485
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -79539,7 +79539,7 @@
       535
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -79787,7 +79787,7 @@
       526
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -79965,7 +79965,7 @@
       433
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -80241,7 +80241,7 @@
       430
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -80489,7 +80489,7 @@
       512
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -80625,7 +80625,7 @@
       250
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -80859,7 +80859,7 @@
       346
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -81163,7 +81163,7 @@
       332
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -81411,7 +81411,7 @@
       275
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -81533,7 +81533,7 @@
       426
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -81879,7 +81879,7 @@
       533
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -82071,7 +82071,7 @@
       513
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -82277,7 +82277,7 @@
       461
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -82441,7 +82441,7 @@
       508
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -82759,7 +82759,7 @@
       375
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -83035,7 +83035,7 @@
       315
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -83143,7 +83143,7 @@
       250
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -83293,7 +83293,7 @@
       330
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -83527,7 +83527,7 @@
       330
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -83775,7 +83775,7 @@
       541
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -83953,7 +83953,7 @@
       271
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -84145,7 +84145,7 @@
       374
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -84393,7 +84393,7 @@
       297
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -84613,7 +84613,7 @@
       260
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -84791,7 +84791,7 @@
       255
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -85053,7 +85053,7 @@
       519
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -85329,7 +85329,7 @@
       329
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -85577,7 +85577,7 @@
       260
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -85755,7 +85755,7 @@
       429
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -86031,7 +86031,7 @@
       398
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -86251,7 +86251,7 @@
       234
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -86513,7 +86513,7 @@
       517
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -86775,7 +86775,7 @@
       316
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -86981,7 +86981,7 @@
       259
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -87201,7 +87201,7 @@
       539
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -87365,7 +87365,7 @@
       501
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -87543,7 +87543,7 @@
       332
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -87805,7 +87805,7 @@
       321
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -87913,7 +87913,7 @@
       399
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -88189,7 +88189,7 @@
       336
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -88381,7 +88381,7 @@
       477
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -88573,7 +88573,7 @@
       398
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -88765,7 +88765,7 @@
       337
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -89013,7 +89013,7 @@
       494
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -89219,7 +89219,7 @@
       405
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -89439,7 +89439,7 @@
       509
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -89631,7 +89631,7 @@
       526
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -89879,7 +89879,7 @@
       398
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -90043,7 +90043,7 @@
       467
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -90193,7 +90193,7 @@
       376
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -90441,7 +90441,7 @@
       338
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -90605,7 +90605,7 @@
       441
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -90783,7 +90783,7 @@
       275
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -91045,7 +91045,7 @@
       443
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -91209,7 +91209,7 @@
       311
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -91415,7 +91415,7 @@
       504
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -91621,7 +91621,7 @@
       513
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -91771,7 +91771,7 @@
       458
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -91949,7 +91949,7 @@
       499
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -92183,7 +92183,7 @@
       529
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -92459,7 +92459,7 @@
       430
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -92693,7 +92693,7 @@
       432
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -92885,7 +92885,7 @@
       505
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -92937,7 +92937,7 @@
       503
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -93171,7 +93171,7 @@
       502
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -93335,7 +93335,7 @@
       427
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -93527,7 +93527,7 @@
       514
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -93663,7 +93663,7 @@
       536
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -93925,7 +93925,7 @@
       329
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -94159,7 +94159,7 @@
       529
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -94365,7 +94365,7 @@
       312
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -94487,7 +94487,7 @@
       390
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -94595,7 +94595,7 @@
       260
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -94745,7 +94745,7 @@
       523
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -94937,7 +94937,7 @@
       306
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -95227,7 +95227,7 @@
       330
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -95447,7 +95447,7 @@
       543
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -95639,7 +95639,7 @@
       369
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -95873,7 +95873,7 @@
       351
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -96149,7 +96149,7 @@
       281
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -96355,7 +96355,7 @@
       533
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -96491,7 +96491,7 @@
       370
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -96711,7 +96711,7 @@
       465
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -96917,7 +96917,7 @@
       531
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -97151,7 +97151,7 @@
       526
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -97385,7 +97385,7 @@
       241
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -97661,7 +97661,7 @@
       332
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -97881,7 +97881,7 @@
       511
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -98073,7 +98073,7 @@
       372
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -98405,7 +98405,7 @@
       523
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -98681,7 +98681,7 @@
       541
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -98915,7 +98915,7 @@
       262
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p3\\top_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -99149,7 +99149,7 @@
       268
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -99397,7 +99397,7 @@
       268
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -99505,7 +99505,7 @@
       337
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -99669,7 +99669,7 @@
       445
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -99959,7 +99959,7 @@
       373
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p2\\left_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -100207,7 +100207,7 @@
       428
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -100483,7 +100483,7 @@
       263
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -100703,7 +100703,7 @@
       538
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -100881,7 +100881,7 @@
       513
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -101045,7 +101045,7 @@
       233
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -101237,7 +101237,7 @@
       529
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p1\\bottom_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -101415,7 +101415,7 @@
       448
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p2\\left_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -101579,7 +101579,7 @@
       258
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p3\\top_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -101939,7 +101939,7 @@
       373
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p4\\right_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -102131,7 +102131,7 @@
       441
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\funky_yellow_round\\p4\\right_round.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
@@ -102449,7 +102449,7 @@
       494
     ],
     "token_source": "C:\\Users\\doria\\Documents\\EPFL\\IA\\iapr2026do\\project\\training_data\\training_images\\token_crops\\white_rectangular_black\\p1\\bottom_rect.png",
-    "mask_gap_pixels": 2,
+    "mask_gap_pixels": 4,
     "cards": [
       {
         "instance_id": 1,
