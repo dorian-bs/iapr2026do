@@ -81,6 +81,7 @@ class TrainPipelineConfig:
     balanced_sampling: bool = True
     early_stop_patience: int = 3
     min_epochs_per_stage: int = 2
+    epoch_max_train_samples: int | None = None
 
     batch_size_cuda: int = 32
     batch_size_mps: int = 16
@@ -188,6 +189,11 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     batch_size = _select_batch_size(device, cfg)
     use_amp = device.type == "cuda"
 
+    if cfg.epoch_max_train_samples is not None and cfg.epoch_max_train_samples <= 0:
+        raise ValueError(
+            f"epoch_max_train_samples must be > 0 or None, got {cfg.epoch_max_train_samples}"
+        )
+
     print(f"Project root: {project_root}")
     print(f"Training data: {training_data}")
     print(f"Model output dir: {models_dir}")
@@ -254,6 +260,13 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         len(scene_predicted_train_samples), "scene_predicted", batch_size, device, cfg
     )
 
+    if cfg.epoch_max_train_samples is not None:
+        cap = int(cfg.epoch_max_train_samples)
+        ref_per_epoch = min(ref_per_epoch, cap)
+        aug_per_epoch = min(aug_per_epoch, cap)
+        scene_manual_per_epoch = min(scene_manual_per_epoch, cap)
+        scene_pred_per_epoch = min(scene_pred_per_epoch, cap)
+
     # ---------------- loaders ----------------
     pin_memory = device.type == "cuda"
     common = dict(
@@ -307,6 +320,8 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     print(f"Augmented-card samples:      {len(augmented_card_samples)} (per_epoch={aug_per_epoch})")
     print(f"Scene-manual train/val:      {len(scene_train_samples)}/{len(scene_val_samples)} (per_epoch={scene_manual_per_epoch})")
     print(f"Scene-predicted train:       {len(scene_predicted_train_samples)} (per_epoch={scene_pred_per_epoch})")
+    if cfg.epoch_max_train_samples is not None:
+        print(f"Global epoch_max_train_samples cap: {cfg.epoch_max_train_samples}")
     print(f"Num classes:                 {len(label_encoder.classes_)}")
     print(f"Skipped aug labels/files/masks: {skipped_aug_labels}/{skipped_aug_files}/{skipped_aug_masks}")
     print(f"Skipped scene labels/boxes/masks: {skipped_scene_labels}/{skipped_scene_boxes}/{skipped_scene_masks}")
@@ -512,10 +527,42 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
     val_loader_predicted: DataLoader = state["val_loader_predicted"]
 
     stage_plan = [
-        ("stage1_reference",            cfg.stage_1_epochs, state["train_loader_ref"],       cfg.stage_1_lr, "reference"),
-        ("stage2_augmented_cards",      cfg.stage_2_epochs, state["train_loader_augmented"], cfg.stage_2_lr, "augmented_card"),
-        ("stage3_scene_manual_masks",   cfg.stage_3_epochs, state["train_loader_manual"],    cfg.stage_3_lr, "scene_manual"),
-        ("stage4_scene_predicted_masks",cfg.stage_4_epochs, state["train_loader_predicted"], cfg.stage_4_lr, "scene_predicted"),
+        (
+            "stage1_reference",
+            cfg.stage_1_epochs,
+            state["reference_samples"],
+            state["reference_samples_per_epoch"],
+            cfg.stage_1_lr,
+            "reference",
+            None,
+        ),
+        (
+            "stage2_augmented_cards",
+            cfg.stage_2_epochs,
+            state["augmented_card_samples"],
+            state["augmented_samples_per_epoch"],
+            cfg.stage_2_lr,
+            "augmented_card",
+            None,
+        ),
+        (
+            "stage3_scene_manual_masks",
+            cfg.stage_3_epochs,
+            state["scene_train_samples"],
+            state["scene_manual_samples_per_epoch"],
+            cfg.stage_3_lr,
+            "scene_manual",
+            None,
+        ),
+        (
+            "stage4_scene_predicted_masks",
+            cfg.stage_4_epochs,
+            state["scene_predicted_train_samples"],
+            state["scene_predicted_samples_per_epoch"],
+            cfg.stage_4_lr,
+            "scene_predicted",
+            state["predicted_scene_probs"],
+        ),
     ]
 
     # Selection policy: best epoch within the LAST executed stage only.
@@ -532,14 +579,20 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
     history: list[dict[str, float | int | str]] = []
     global_start = time.perf_counter()
 
-    for stage_name, stage_epochs, stage_loader, stage_lr, stage_kind in stage_plan:
-        if stage_epochs <= 0 or len(stage_loader.dataset) == 0:
+    for stage_index, (
+        stage_name,
+        stage_epochs,
+        stage_samples,
+        stage_samples_per_epoch,
+        stage_lr,
+        stage_kind,
+        stage_predicted_probs,
+    ) in enumerate(stage_plan, start=1):
+        if stage_epochs <= 0 or len(stage_samples) == 0:
             print(f"[skip] {stage_name}: no epochs or no samples")
             continue
 
-        samples_per_epoch = (
-            len(stage_loader.sampler) if stage_loader.sampler is not None else len(stage_loader.dataset)
-        )
+        samples_per_epoch = int(min(stage_samples_per_epoch, len(stage_samples)))
 
         optimizer = torch.optim.AdamW(model.parameters(), lr=stage_lr, weight_decay=cfg.weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
@@ -549,11 +602,30 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
 
         print(
             f"\n[{stage_name}] epochs={stage_epochs}, lr={stage_lr:.2e}, "
-            f"dataset_samples={len(stage_loader.dataset)}, samples_per_epoch={samples_per_epoch}"
+            f"dataset_samples={len(stage_samples)}, samples_per_epoch={samples_per_epoch}"
         )
 
         for epoch in range(1, stage_epochs + 1):
             epoch_start = time.perf_counter()
+
+            epoch_seed = cfg.seed + stage_index * 10_000 + epoch
+            stage_loader, _ = make_loader(
+                samples=stage_samples,
+                label_to_index=state["label_to_index"],
+                batch_size=state["batch_size"],
+                image_size=cfg.img_size,
+                bbox_margin=cfg.bbox_margin,
+                mask_threshold=cfg.mask_threshold,
+                shuffle=True,
+                augment=True,
+                pin_memory=(device.type == "cuda"),
+                num_workers=cfg.num_workers,
+                seed=cfg.seed,
+                predicted_scene_probs=stage_predicted_probs,
+                balanced=cfg.balanced_sampling,
+                samples_per_epoch=samples_per_epoch,
+                sampler_seed=epoch_seed,
+            )
 
             train_metrics = _train_one_epoch(
                 model, stage_loader, optimizer, ce_loss, scaler, use_amp, device, cfg, stage_kind
@@ -647,19 +719,43 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
 def _stage_plan_summary(state: dict[str, Any]) -> list[dict[str, Any]]:
     cfg: TrainPipelineConfig = state["config"]
     entries = [
-        ("stage1_reference",            cfg.stage_1_epochs, cfg.stage_1_lr, state["reference_samples"],          state["train_loader_ref"]),
-        ("stage2_augmented_cards",      cfg.stage_2_epochs, cfg.stage_2_lr, state["augmented_card_samples"],     state["train_loader_augmented"]),
-        ("stage3_scene_manual_masks",   cfg.stage_3_epochs, cfg.stage_3_lr, state["scene_train_samples"],        state["train_loader_manual"]),
-        ("stage4_scene_predicted_masks",cfg.stage_4_epochs, cfg.stage_4_lr, state["scene_predicted_train_samples"], state["train_loader_predicted"]),
+        (
+            "stage1_reference",
+            cfg.stage_1_epochs,
+            cfg.stage_1_lr,
+            state["reference_samples"],
+            state["reference_samples_per_epoch"],
+        ),
+        (
+            "stage2_augmented_cards",
+            cfg.stage_2_epochs,
+            cfg.stage_2_lr,
+            state["augmented_card_samples"],
+            state["augmented_samples_per_epoch"],
+        ),
+        (
+            "stage3_scene_manual_masks",
+            cfg.stage_3_epochs,
+            cfg.stage_3_lr,
+            state["scene_train_samples"],
+            state["scene_manual_samples_per_epoch"],
+        ),
+        (
+            "stage4_scene_predicted_masks",
+            cfg.stage_4_epochs,
+            cfg.stage_4_lr,
+            state["scene_predicted_train_samples"],
+            state["scene_predicted_samples_per_epoch"],
+        ),
     ]
     out: list[dict[str, Any]] = []
-    for name, epochs, lr, samples, loader in entries:
+    for name, epochs, lr, samples, samples_per_epoch in entries:
         out.append({
             "stage": name,
             "epochs": epochs,
             "learning_rate": lr,
             "n_samples": len(samples),
-            "samples_per_epoch": len(loader.sampler) if loader.sampler is not None else len(loader.dataset),
+            "samples_per_epoch": int(min(samples_per_epoch, len(samples))),
         })
     return out
 

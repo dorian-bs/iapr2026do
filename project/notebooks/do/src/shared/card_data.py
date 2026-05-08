@@ -21,7 +21,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset, RandomSampler, WeightedRandomSampler
 
 from .card_models import SceneUNetSmall, assert_param_cap
 from .card_pipeline import (
@@ -440,6 +440,7 @@ def make_loader(
     predicted_scene_probs: dict[str, np.ndarray] | None = None,
     balanced: bool = False,
     samples_per_epoch: int | None = None,
+    sampler_seed: int | None = None,
 ) -> tuple[DataLoader, CardMaskedDataset]:
     dataset = CardMaskedDataset(
         samples=samples,
@@ -450,11 +451,18 @@ def make_loader(
         augment=augment,
         predicted_scene_probs=predicted_scene_probs,
     )
-    sampler = (
-        make_balanced_sampler(samples, seed=seed, samples_per_epoch=samples_per_epoch)
-        if balanced and len(samples) > 0
-        else None
-    )
+    effective_seed = seed if sampler_seed is None else int(sampler_seed)
+
+    sampler = None
+    if len(samples) > 0 and balanced:
+        sampler = make_balanced_sampler(samples, seed=effective_seed, samples_per_epoch=samples_per_epoch)
+    elif samples_per_epoch is not None and len(samples) > 0:
+        n = int(min(max(1, samples_per_epoch), len(samples)))
+        if n < len(samples):
+            generator = torch.Generator()
+            generator.manual_seed(effective_seed)
+            sampler = RandomSampler(dataset, replacement=False, num_samples=n, generator=generator)
+
     loader = DataLoader(
         dataset,
         batch_size=batch_size,

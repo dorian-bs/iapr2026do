@@ -394,7 +394,14 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
             )
         epoch_train_samples = min(cfg.epoch_max_train_samples, len(train_ds))
         if epoch_train_samples < len(train_ds):
-            train_sampler = RandomSampler(train_ds, replacement=False, num_samples=epoch_train_samples)
+            sampler_generator = torch.Generator()
+            sampler_generator.manual_seed(cfg.seed)
+            train_sampler = RandomSampler(
+                train_ds,
+                replacement=False,
+                num_samples=epoch_train_samples,
+                generator=sampler_generator,
+            )
             print(
                 f"Per-epoch train cap enabled: {epoch_train_samples}/{len(train_ds)} samples "
                 f"(epoch_max_train_samples={cfg.epoch_max_train_samples})"
@@ -486,6 +493,7 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
         "val_ds": val_ds,
         "epoch_train_samples": epoch_train_samples,
         "train_loader": train_loader,
+        "train_loader_kwargs": loader_kwargs,
         "val_loader": val_loader,
         "model": model,
         "model_params": n_params,
@@ -521,6 +529,8 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     device: torch.device = state["device"]
     channels_last: bool = state["channels_last"]
     train_loader: DataLoader = state["train_loader"]
+    train_ds: SceneSegDataset = state["train_ds"]
+    train_loader_kwargs: dict[str, Any] = state["train_loader_kwargs"]
     val_loader: DataLoader = state["val_loader"]
     epoch_train_samples: int = state.get("epoch_train_samples", len(train_loader.dataset))
     scene_checkpoint: Path = state["scene_checkpoint"]
@@ -546,6 +556,12 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         f"| loss_mix(bce/dice)=({bce_weight:.2f}/{dice_weight:.2f})",
         flush=True,
     )
+    if epoch_train_samples < len(train_ds):
+        print(
+            "Per-epoch train cap is active: each epoch draws a fresh random subset "
+            "from the full training set.",
+            flush=True,
+        )
     if device.type != "cuda":
         print("[warning] Running on CPU. It is normal if each epoch takes several minutes.", flush=True)
 
@@ -553,6 +569,22 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         print(f"\n[Epoch {epoch:02d}/{cfg.epochs}] starting...", flush=True)
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats()
+
+        if epoch_train_samples < len(train_ds):
+            epoch_generator = torch.Generator()
+            epoch_generator.manual_seed(cfg.seed + epoch)
+            epoch_sampler = RandomSampler(
+                train_ds,
+                replacement=False,
+                num_samples=epoch_train_samples,
+                generator=epoch_generator,
+            )
+            train_loader = DataLoader(
+                train_ds,
+                shuffle=False,
+                sampler=epoch_sampler,
+                **train_loader_kwargs,
+            )
 
         train_start = time.perf_counter()
         train_loss, train_iou, n_train = _train_one_epoch_verbose(
