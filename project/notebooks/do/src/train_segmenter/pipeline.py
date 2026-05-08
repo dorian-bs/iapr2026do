@@ -25,7 +25,7 @@ import torch.nn as nn
 import torchvision.transforms.functional as TF
 from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, RandomSampler
 
 from src.shared.card_models import SceneUNetSmall, assert_param_cap
 from src.shared.card_pipeline import IMAGENET_MEAN, IMAGENET_STD, find_workspace_root
@@ -41,6 +41,8 @@ class SegmenterPipelineConfig:
     seed: int = 42
     image_size: int = 256
     val_split: float = 0.35
+    max_scene_pairs: int | None = None
+    epoch_max_train_samples: int | None = None
     cache_in_ram: bool = True
     num_workers: int = 4
 
@@ -48,6 +50,10 @@ class SegmenterPipelineConfig:
     batch_size: int = 4
     learning_rate: float = 1e-3
     weight_decay: float = 1e-4
+    train_loss_bce_weight: float = 0.5
+    train_loss_dice_weight: float = 0.5
+    scheduler_factor: float = 0.5
+    scheduler_patience: int = 2
 
     use_amp: bool = True
     use_torch_compile: bool = False
@@ -188,6 +194,8 @@ def _train_one_epoch_verbose(
     device: torch.device,
     log_every: int = 25,
     channels_last: bool = False,
+    bce_weight: float = 0.5,
+    dice_weight: float = 0.5,
 ):
     model.train()
     running_loss = 0.0
@@ -207,7 +215,7 @@ def _train_one_epoch_verbose(
             logits = model(imgs)
             loss_bce = bce_loss(logits, masks)
             loss_dice = dice_loss_from_logits(logits, masks)
-            loss = 0.5 * loss_bce + 0.5 * loss_dice
+            loss = bce_weight * loss_bce + dice_weight * loss_dice
 
         if scaler is not None and amp_enabled:
             scaler.scale(loss).backward()
@@ -239,7 +247,7 @@ def _train_one_epoch_verbose(
 
 
 @torch.no_grad()
-def _evaluate(model, loader, bce_loss, amp_enabled, device):
+def _evaluate(model, loader, bce_loss, amp_enabled, device, bce_weight: float = 0.5, dice_weight: float = 0.5):
     model.eval()
     running_loss = 0.0
     running_iou = 0.0
@@ -253,7 +261,7 @@ def _evaluate(model, loader, bce_loss, amp_enabled, device):
             logits = model(imgs)
             loss_bce = bce_loss(logits, masks)
             loss_dice = dice_loss_from_logits(logits, masks)
-            loss = 0.5 * loss_bce + 0.5 * loss_dice
+            loss = bce_weight * loss_bce + dice_weight * loss_dice
 
         bs = imgs.size(0)
         running_loss += loss.item() * bs
@@ -336,7 +344,7 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
 
     # ---------------- pairs & split ----------------
     scene_pairs, missing_masks = _build_pairs(scene_images_dir, scene_masks_dir)
-    print(f"Total scene pairs: {len(scene_pairs)}")
+    print(f"Total scene pairs discovered: {len(scene_pairs)}")
     if missing_masks:
         print(f"Images without matching mask: {len(missing_masks)}")
         print("First missing examples:", missing_masks[:5])
@@ -346,6 +354,21 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
             "No augmented scene pairs found. Check training_images/augmented_scenes and "
             "training_masks/augmented_scenes."
         )
+
+    if cfg.max_scene_pairs is not None:
+        if cfg.max_scene_pairs <= 0:
+            raise ValueError(f"max_scene_pairs must be > 0 or None, got {cfg.max_scene_pairs}")
+        if len(scene_pairs) > cfg.max_scene_pairs:
+            subset_rng = random.Random(cfg.seed)
+            scene_pairs = subset_rng.sample(scene_pairs, k=cfg.max_scene_pairs)
+            print(
+                f"Using subset of augmented scenes: {len(scene_pairs)} pairs "
+                f"(max_scene_pairs={cfg.max_scene_pairs})"
+            )
+        else:
+            print(
+                f"max_scene_pairs={cfg.max_scene_pairs} (no-op: dataset has fewer pairs)"
+            )
 
     train_pairs, val_pairs = train_test_split(
         scene_pairs, test_size=cfg.val_split, random_state=cfg.seed, shuffle=True,
@@ -362,6 +385,26 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
         print("[info] cache_in_ram=True with num_workers>0 can stall on Windows; forcing num_workers=0")
         effective_workers = 0
 
+    train_sampler = None
+    epoch_train_samples = len(train_ds)
+    if cfg.epoch_max_train_samples is not None:
+        if cfg.epoch_max_train_samples <= 0:
+            raise ValueError(
+                f"epoch_max_train_samples must be > 0 or None, got {cfg.epoch_max_train_samples}"
+            )
+        epoch_train_samples = min(cfg.epoch_max_train_samples, len(train_ds))
+        if epoch_train_samples < len(train_ds):
+            train_sampler = RandomSampler(train_ds, replacement=False, num_samples=epoch_train_samples)
+            print(
+                f"Per-epoch train cap enabled: {epoch_train_samples}/{len(train_ds)} samples "
+                f"(epoch_max_train_samples={cfg.epoch_max_train_samples})"
+            )
+        else:
+            print(
+                f"epoch_max_train_samples={cfg.epoch_max_train_samples} "
+                f"(no-op: train set is smaller)"
+            )
+
     loader_kwargs: dict[str, Any] = dict(
         batch_size=cfg.batch_size,
         num_workers=effective_workers,
@@ -371,10 +414,16 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
         loader_kwargs["persistent_workers"] = True
         loader_kwargs["prefetch_factor"] = 2
 
-    train_loader = DataLoader(train_ds, shuffle=True, **loader_kwargs)
+    if train_sampler is None:
+        train_loader = DataLoader(train_ds, shuffle=True, **loader_kwargs)
+    else:
+        train_loader = DataLoader(train_ds, shuffle=False, sampler=train_sampler, **loader_kwargs)
     val_loader = DataLoader(val_ds, shuffle=False, **loader_kwargs)
 
-    print(f"Train samples: {len(train_ds)} | Val samples: {len(val_ds)}")
+    print(
+        f"Train samples: {len(train_ds)} (per-epoch: {epoch_train_samples}) | "
+        f"Val samples: {len(val_ds)}"
+    )
     print(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
     print(f"Loader workers in use: {effective_workers} (windows={is_windows})")
 
@@ -404,7 +453,16 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
 
     bce_loss = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
+    if cfg.scheduler_patience < 0:
+        raise ValueError(f"scheduler_patience must be >= 0, got {cfg.scheduler_patience}")
+    if not (0.0 < cfg.scheduler_factor <= 1.0):
+        raise ValueError(f"scheduler_factor must be in (0, 1], got {cfg.scheduler_factor}")
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="max",
+        factor=cfg.scheduler_factor,
+        patience=cfg.scheduler_patience,
+    )
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if device.type == "cuda" else None
 
     scene_checkpoint = models_dir / cfg.checkpoint_filename
@@ -426,6 +484,7 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
         "val_pairs": val_pairs,
         "train_ds": train_ds,
         "val_ds": val_ds,
+        "epoch_train_samples": epoch_train_samples,
         "train_loader": train_loader,
         "val_loader": val_loader,
         "model": model,
@@ -463,8 +522,18 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     channels_last: bool = state["channels_last"]
     train_loader: DataLoader = state["train_loader"]
     val_loader: DataLoader = state["val_loader"]
+    epoch_train_samples: int = state.get("epoch_train_samples", len(train_loader.dataset))
     scene_checkpoint: Path = state["scene_checkpoint"]
     history: dict[str, list] = state["history"]
+
+    loss_weight_sum = cfg.train_loss_bce_weight + cfg.train_loss_dice_weight
+    if cfg.train_loss_bce_weight < 0 or cfg.train_loss_dice_weight < 0 or loss_weight_sum <= 0:
+        raise ValueError(
+            "train_loss_bce_weight and train_loss_dice_weight must be >= 0 "
+            "and at least one must be > 0"
+        )
+    bce_weight = cfg.train_loss_bce_weight / loss_weight_sum
+    dice_weight = cfg.train_loss_dice_weight / loss_weight_sum
 
     best_val_iou = -1.0
     best_epoch = 0
@@ -472,7 +541,9 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     global_start = time.perf_counter()
 
     print(
-        f"Starting training on {device} | train_batches={len(train_loader)} val_batches={len(val_loader)}",
+        f"Starting training on {device} | train_batches={len(train_loader)} "
+        f"val_batches={len(val_loader)} | epoch_train_samples={epoch_train_samples} "
+        f"| loss_mix(bce/dice)=({bce_weight:.2f}/{dice_weight:.2f})",
         flush=True,
     )
     if device.type != "cuda":
@@ -487,11 +558,15 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         train_loss, train_iou, n_train = _train_one_epoch_verbose(
             model, train_loader, optimizer, bce_loss, scaler, use_amp, device,
             log_every=cfg.log_every_batches, channels_last=channels_last,
+            bce_weight=bce_weight, dice_weight=dice_weight,
         )
         train_seconds = time.perf_counter() - train_start
 
         val_start = time.perf_counter()
-        val_loss, val_iou, _ = _evaluate(model, val_loader, bce_loss, use_amp, device)
+        val_loss, val_iou, _ = _evaluate(
+            model, val_loader, bce_loss, use_amp, device,
+            bce_weight=bce_weight, dice_weight=dice_weight,
+        )
         val_seconds = time.perf_counter() - val_start
 
         scheduler.step(val_iou)

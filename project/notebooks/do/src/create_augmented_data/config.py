@@ -11,14 +11,14 @@ class CreateAugmentedDataConfig:
     seed: int = 42
 
     # Single-card augmentation knobs.
-    n_aug_per_reference: int = 100
+    n_aug_per_reference: int = 400
     aug_card_canvas: tuple[int, int] = (256, 256)
     aug_card_height_range: tuple[int, int] = (140, 220)
     aug_card_angle_range_deg: tuple[float, float] = (-25.0, 25.0)
     aug_card_shift_fraction: float = 0.12
 
     # Scene generation knobs.
-    n_scenes: int = 3000
+    n_scenes: int = 4000
     scene_width: int = 1280
     scene_height: int = 720
     min_cards_per_player: int = 0
