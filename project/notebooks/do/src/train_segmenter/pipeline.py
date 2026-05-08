@@ -25,7 +25,7 @@ import torch.nn as nn
 import torchvision.transforms.functional as TF
 from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset, RandomSampler
+from torch.utils.data import DataLoader, Dataset, RandomSampler, SubsetRandomSampler
 
 from src.shared.card_models import SceneUNetSmall, assert_param_cap
 from src.shared.card_pipeline import IMAGENET_MEAN, IMAGENET_STD, find_workspace_root
@@ -550,6 +550,16 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     epochs_without_improvement = 0
     global_start = time.perf_counter()
 
+    # If epochs are capped, cycle through a shuffled index list so all training
+    # samples are consumed before any repeat.
+    coverage_indices: list[int] | None = None
+    coverage_cursor = 0
+    coverage_rng: random.Random | None = None
+    if epoch_train_samples < len(train_ds):
+        coverage_indices = list(range(len(train_ds)))
+        coverage_rng = random.Random(cfg.seed)
+        coverage_rng.shuffle(coverage_indices)
+
     print(
         f"Starting training on {device} | train_batches={len(train_loader)} "
         f"val_batches={len(val_loader)} | epoch_train_samples={epoch_train_samples} "
@@ -558,8 +568,8 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     )
     if epoch_train_samples < len(train_ds):
         print(
-            "Per-epoch train cap is active: each epoch draws a fresh random subset "
-            "from the full training set.",
+            "Per-epoch train cap is active: epochs cycle through a shuffled full "
+            "training index pool before repeating samples.",
             flush=True,
         )
     if device.type != "cuda":
@@ -571,14 +581,25 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
             torch.cuda.reset_peak_memory_stats()
 
         if epoch_train_samples < len(train_ds):
+            if coverage_indices is None or coverage_rng is None:
+                raise RuntimeError("Coverage sampler state was not initialized.")
+
+            selected_indices: list[int] = []
+            while len(selected_indices) < epoch_train_samples:
+                remaining_in_cycle = len(coverage_indices) - coverage_cursor
+                to_take = min(epoch_train_samples - len(selected_indices), remaining_in_cycle)
+                selected_indices.extend(
+                    coverage_indices[coverage_cursor: coverage_cursor + to_take]
+                )
+                coverage_cursor += to_take
+
+                if coverage_cursor >= len(coverage_indices):
+                    coverage_rng.shuffle(coverage_indices)
+                    coverage_cursor = 0
+
             epoch_generator = torch.Generator()
             epoch_generator.manual_seed(cfg.seed + epoch)
-            epoch_sampler = RandomSampler(
-                train_ds,
-                replacement=False,
-                num_samples=epoch_train_samples,
-                generator=epoch_generator,
-            )
+            epoch_sampler = SubsetRandomSampler(selected_indices, generator=epoch_generator)
             train_loader = DataLoader(
                 train_ds,
                 shuffle=False,

@@ -605,12 +605,46 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             f"dataset_samples={len(stage_samples)}, samples_per_epoch={samples_per_epoch}"
         )
 
+        coverage_indices: list[int] | None = None
+        coverage_cursor = 0
+        coverage_rng: random.Random | None = None
+        if samples_per_epoch < len(stage_samples):
+            coverage_indices = list(range(len(stage_samples)))
+            coverage_rng = random.Random(cfg.seed + stage_index * 10_000)
+            coverage_rng.shuffle(coverage_indices)
+            print(
+                "  per-epoch cap active: epochs cycle through the full stage "
+                "sample pool before repeating"
+            )
+
         for epoch in range(1, stage_epochs + 1):
             epoch_start = time.perf_counter()
 
             epoch_seed = cfg.seed + stage_index * 10_000 + epoch
+            epoch_samples = stage_samples
+            epoch_samples_per_epoch = samples_per_epoch
+            if samples_per_epoch < len(stage_samples):
+                if coverage_indices is None or coverage_rng is None:
+                    raise RuntimeError("Coverage sampler state was not initialized.")
+
+                selected_indices: list[int] = []
+                while len(selected_indices) < samples_per_epoch:
+                    remaining_in_cycle = len(coverage_indices) - coverage_cursor
+                    to_take = min(samples_per_epoch - len(selected_indices), remaining_in_cycle)
+                    selected_indices.extend(
+                        coverage_indices[coverage_cursor: coverage_cursor + to_take]
+                    )
+                    coverage_cursor += to_take
+
+                    if coverage_cursor >= len(coverage_indices):
+                        coverage_rng.shuffle(coverage_indices)
+                        coverage_cursor = 0
+
+                epoch_samples = [stage_samples[i] for i in selected_indices]
+                epoch_samples_per_epoch = None
+
             stage_loader, _ = make_loader(
-                samples=stage_samples,
+                samples=epoch_samples,
                 label_to_index=state["label_to_index"],
                 batch_size=state["batch_size"],
                 image_size=cfg.img_size,
@@ -623,7 +657,7 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 seed=cfg.seed,
                 predicted_scene_probs=stage_predicted_probs,
                 balanced=cfg.balanced_sampling,
-                samples_per_epoch=samples_per_epoch,
+                samples_per_epoch=epoch_samples_per_epoch,
                 sampler_seed=epoch_seed,
             )
 

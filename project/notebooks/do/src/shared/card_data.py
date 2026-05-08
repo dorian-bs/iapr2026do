@@ -422,7 +422,10 @@ def make_balanced_sampler(
     n = len(samples) if samples_per_epoch is None else int(min(samples_per_epoch, len(samples)))
     generator = torch.Generator()
     generator.manual_seed(seed)
-    return WeightedRandomSampler(weights, num_samples=n, replacement=True, generator=generator)
+    # Keep draws unique within an epoch when we cap samples_per_epoch: this
+    # avoids repeatedly revisiting the same few examples in one epoch while
+    # still redrawing a fresh weighted subset each epoch (different seed).
+    return WeightedRandomSampler(weights, num_samples=n, replacement=False, generator=generator)
 
 
 def make_loader(
