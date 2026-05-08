@@ -63,6 +63,7 @@ class Paths:
     funky_bg_path: Path
     white_bg_path: Path
     aug_cards_dir: Path
+    aug_masks_dir: Path
     aug_labels_dir: Path
     aug_csv_path: Path
     scenes_img_dir: Path
@@ -83,6 +84,7 @@ def resolve_paths() -> Paths:
     white_bg_path = training_data / "white_bg.jpg"
 
     aug_cards_dir = training_data / "training_images" / "augmented_cards"
+    aug_masks_dir = training_data / "training_masks" / "augmented_cards"
     aug_labels_dir = training_data / "object_labels" / "augmented_cards"
     aug_csv_path = aug_labels_dir / "aug.csv"
 
@@ -102,6 +104,7 @@ def resolve_paths() -> Paths:
         funky_bg_path=funky_bg_path,
         white_bg_path=white_bg_path,
         aug_cards_dir=aug_cards_dir,
+        aug_masks_dir=aug_masks_dir,
         aug_labels_dir=aug_labels_dir,
         aug_csv_path=aug_csv_path,
         scenes_img_dir=scenes_img_dir,
@@ -116,6 +119,7 @@ def ensure_output_dirs(paths: Paths) -> None:
     """Create every output directory and the per-player token folders."""
     for output_dir in (
         paths.aug_cards_dir,
+        paths.aug_masks_dir,
         paths.aug_labels_dir,
         paths.scenes_img_dir,
         paths.scenes_mask_dir,

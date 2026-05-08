@@ -32,6 +32,7 @@ from sklearn.preprocessing import LabelEncoder
 
 from src.shared.card_data import assert_no_test_inputs, reference_crop_path
 from src.shared.card_pipeline import (
+    compose_masked_card_image,
     crop_with_margin,
     find_workspace_root,
     is_reasonable_scene_bbox,
@@ -49,6 +50,8 @@ class CardSample:
     label: str
     image_path: Path
     bbox: tuple[int, int, int, int] | None = None
+    scene_mask_path: Path | None = None
+    mask_path: Path | None = None
 
 
 def _default_source_weights() -> dict[str, float]:
@@ -99,13 +102,41 @@ def _resolve_project_path(path_value: str | Path, project_root: Path) -> Path:
     return path if path.is_absolute() else project_root / path
 
 
-def _read_sample_bgr(sample: CardSample, bbox_margin: float) -> np.ndarray:
+def _read_sample_bgr_and_mask(sample: CardSample, bbox_margin: float) -> tuple[np.ndarray, np.ndarray]:
     img_bgr = cv2.imread(str(sample.image_path), cv2.IMREAD_COLOR)
     if img_bgr is None:
         raise FileNotFoundError(f"Cannot read image: {sample.image_path}")
+
     if sample.bbox is not None:
         img_bgr = crop_with_margin(img_bgr, sample.bbox, margin_fraction=bbox_margin)
-    return img_bgr
+
+    if sample.source == "augmented_scene":
+        if sample.scene_mask_path is None or sample.bbox is None:
+            raise ValueError("augmented_scene sample requires scene_mask_path and bbox.")
+        scene_mask = cv2.imread(str(sample.scene_mask_path), cv2.IMREAD_GRAYSCALE)
+        if scene_mask is None:
+            raise FileNotFoundError(f"Cannot read scene mask: {sample.scene_mask_path}")
+        mask_u8 = crop_with_margin(scene_mask, sample.bbox, margin_fraction=bbox_margin)
+        mask_u8 = np.where(mask_u8 > 127, 255, 0).astype(np.uint8)
+
+    elif sample.source == "augmented_card" and sample.mask_path is not None:
+        mask_u8 = cv2.imread(str(sample.mask_path), cv2.IMREAD_GRAYSCALE)
+        if mask_u8 is None:
+            raise FileNotFoundError(f"Cannot read augmented-card mask: {sample.mask_path}")
+        if mask_u8.shape[:2] != img_bgr.shape[:2]:
+            mask_u8 = cv2.resize(mask_u8, (img_bgr.shape[1], img_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+        mask_u8 = np.where(mask_u8 > 127, 255, 0).astype(np.uint8)
+
+    else:
+        mask_u8 = np.full(img_bgr.shape[:2], 255, dtype=np.uint8)
+
+    if mask_u8.shape[:2] != img_bgr.shape[:2]:
+        mask_u8 = cv2.resize(mask_u8, (img_bgr.shape[1], img_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+    if int(np.count_nonzero(mask_u8)) < 20:
+        mask_u8 = np.full(img_bgr.shape[:2], 255, dtype=np.uint8)
+
+    return img_bgr, mask_u8
 
 
 def _letterbox_cv2(img_bgr: np.ndarray, size: int, fill: int = 128) -> np.ndarray:
@@ -226,12 +257,18 @@ def _load_reference_samples(reference_csv: Path, ref_cards_dir: Path) -> tuple[l
     return samples, missing
 
 
-def _load_augmented_card_samples(aug_csv: Path, aug_cards_dir: Path) -> tuple[list[CardSample], list[str]]:
+def _load_augmented_card_samples(
+    aug_csv: Path,
+    aug_cards_dir: Path,
+    aug_masks_dir: Path,
+    project_root: Path,
+) -> tuple[list[CardSample], list[str], int]:
     samples: list[CardSample] = []
     missing: list[str] = []
+    missing_masks = 0
     if not aug_csv.is_file():
         print(f"[warning] Augmented card CSV not found: {aug_csv}")
-        return samples, missing
+        return samples, missing, missing_masks
     with aug_csv.open(newline="", encoding="utf-8") as csv_file:
         for row in csv.DictReader(csv_file):
             image_id = str(row["image_id"]).strip()
@@ -240,25 +277,53 @@ def _load_augmented_card_samples(aug_csv: Path, aug_cards_dir: Path) -> tuple[li
                 continue
             image_path = aug_cards_dir / f"{image_id}.jpg"
             if image_path.is_file():
-                samples.append(CardSample("augmented_card", label, image_path))
+                mask_path: Path | None = None
+
+                mask_path_raw = str(row.get("mask_path", "")).strip()
+                if mask_path_raw:
+                    candidate = Path(mask_path_raw)
+                    resolved = candidate if candidate.is_absolute() else (project_root / candidate)
+                    if resolved.is_file():
+                        mask_path = resolved
+
+                if mask_path is None:
+                    for suffix in (".png", ".jpg", ".jpeg"):
+                        candidate = aug_masks_dir / f"{image_id}{suffix}"
+                        if candidate.is_file():
+                            mask_path = candidate
+                            break
+
+                if mask_path is None:
+                    missing_masks += 1
+
+                samples.append(CardSample("augmented_card", label, image_path, mask_path=mask_path))
             else:
                 missing.append(str(image_path))
-    return samples, missing
+    return samples, missing, missing_masks
 
 
 def _load_scene_samples(
     scene_labels_path: Path,
     scene_images_dir: Path,
+    scene_masks_dir: Path,
     project_root: Path,
     cfg: TrainPipelineConfig,
-) -> tuple[list[CardSample], list[str], int, int]:
+) -> tuple[list[CardSample], list[str], int, int, int]:
     samples: list[CardSample] = []
     missing: list[str] = []
     skipped_labels = 0
     skipped_boxes = 0
+    skipped_masks = 0
     if not scene_labels_path.is_file():
         print(f"[warning] Augmented scene labels not found: {scene_labels_path}")
-        return samples, missing, skipped_labels, skipped_boxes
+        return samples, missing, skipped_labels, skipped_boxes, skipped_masks
+
+    valid_mask_ext = {".png", ".jpg", ".jpeg"}
+    scene_mask_by_stem = {
+        mask_path.stem: mask_path
+        for mask_path in sorted(scene_masks_dir.iterdir())
+        if mask_path.suffix.lower() in valid_mask_ext
+    }
 
     with scene_labels_path.open("r", encoding="utf-8") as labels_file:
         scene_metadata = json.load(labels_file)
@@ -271,6 +336,10 @@ def _load_scene_samples(
         if not scene_path.is_file():
             missing.append(str(scene_path))
             continue
+
+        scene_name = str(scene_entry.get("scene", "")).strip()
+        scene_mask_path = scene_mask_by_stem.get(scene_path.stem) or scene_mask_by_stem.get(scene_name)
+
         for card in scene_entry.get("cards", []):
             label = _clean_label(card.get("label", ""))
             bbox_raw = card.get("bbox", [])
@@ -286,8 +355,19 @@ def _load_scene_samples(
             ):
                 skipped_boxes += 1
                 continue
-            samples.append(CardSample("augmented_scene", label, scene_path, bbox))
-    return samples, missing, skipped_labels, skipped_boxes
+            if scene_mask_path is None or not scene_mask_path.is_file():
+                skipped_masks += 1
+                continue
+            samples.append(
+                CardSample(
+                    "augmented_scene",
+                    label,
+                    scene_path,
+                    bbox,
+                    scene_mask_path=scene_mask_path,
+                )
+            )
+    return samples, missing, skipped_labels, skipped_boxes, skipped_masks
 
 
 # --------------------------------------------------------------------------- #
@@ -311,25 +391,38 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
 
     ref_cards_dir = training_data / "training_images" / "reference_cards"
     aug_cards_dir = training_data / "training_images" / "augmented_cards"
+    aug_masks_dir = training_data / "training_masks" / "augmented_cards"
     scene_images_dir = training_data / "training_images" / "augmented_scenes"
+    scene_masks_dir = training_data / "training_masks" / "augmented_scenes"
 
     card_clf_path = models_dir / "card_clf_do.pkl"
     card_classes_path = models_dir / "card_classes_do.npy"
     card_config_path = models_dir / "card_classifier_do_config.json"
 
-    for required_path in (reference_csv, ref_cards_dir):
+    for required_path in (reference_csv, ref_cards_dir, aug_masks_dir, scene_masks_dir):
         if not required_path.exists():
             raise FileNotFoundError(f"Missing required classifier input: {required_path}")
 
     # R3: hard fail if any training input lives under a "test" path.
     assert_no_test_inputs(
-        [reference_csv, aug_csv, scene_labels_path, ref_cards_dir, aug_cards_dir, scene_images_dir]
+        [
+            reference_csv,
+            aug_csv,
+            scene_labels_path,
+            ref_cards_dir,
+            aug_cards_dir,
+            aug_masks_dir,
+            scene_images_dir,
+            scene_masks_dir,
+        ]
     )
 
     print(f"Project root: {project_root}")
     print(f"Reference labels: {reference_csv}")
     print(f"Augmented labels: {aug_csv}")
     print(f"Scene labels:     {scene_labels_path}")
+    print(f"Augmented masks:  {aug_masks_dir}")
+    print(f"Scene masks:      {scene_masks_dir}")
     print(f"Model output:     {card_clf_path}")
 
     samples: list[CardSample] = []
@@ -339,12 +432,14 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     samples.extend(ref_samples)
     missing.extend(ref_missing)
 
-    aug_samples, aug_missing = _load_augmented_card_samples(aug_csv, aug_cards_dir)
+    aug_samples, aug_missing, missing_aug_masks = _load_augmented_card_samples(
+        aug_csv, aug_cards_dir, aug_masks_dir, project_root
+    )
     samples.extend(aug_samples)
     missing.extend(aug_missing)
 
-    scene_samples, scene_missing, skipped_scene_labels, skipped_scene_boxes = _load_scene_samples(
-        scene_labels_path, scene_images_dir, project_root, cfg
+    scene_samples, scene_missing, skipped_scene_labels, skipped_scene_boxes, skipped_scene_masks = _load_scene_samples(
+        scene_labels_path, scene_images_dir, scene_masks_dir, project_root, cfg
     )
     samples.extend(scene_samples)
     missing.extend(scene_missing)
@@ -356,8 +451,10 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     print(f"By source: {dict(source_counts)}")
     print(f"Classes: {len(label_counts)}")
     print(f"Smallest class counts: {label_counts.most_common()[-8:]}")
+    print(f"Augmented cards missing masks: {missing_aug_masks}")
     print(f"Skipped scene labels: {skipped_scene_labels}")
     print(f"Skipped scene boxes:  {skipped_scene_boxes}")
+    print(f"Skipped scene masks:  {skipped_scene_masks}")
     if missing:
         print(f"Missing files skipped: {len(missing)}")
         for item in missing[:5]:
@@ -377,8 +474,10 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         "missing_files": missing,
         "source_counts": source_counts,
         "label_counts": label_counts,
+        "missing_aug_masks": missing_aug_masks,
         "skipped_scene_labels": skipped_scene_labels,
         "skipped_scene_boxes": skipped_scene_boxes,
+        "skipped_scene_masks": skipped_scene_masks,
     }
 
 
@@ -398,7 +497,8 @@ def run_feature_extraction(state: dict[str, Any]) -> dict[str, Any]:
 
     print(f"Extracting features from {len(samples)} samples...")
     for index, sample in enumerate(samples, start=1):
-        img_bgr = _read_sample_bgr(sample, cfg.bbox_margin)
+        img_bgr, mask_u8 = _read_sample_bgr_and_mask(sample, cfg.bbox_margin)
+        img_bgr = compose_masked_card_image(img_bgr, mask_u8)
         if img_bgr.size == 0:
             continue
         features.append(_extract_features(img_bgr, cfg))
@@ -543,6 +643,7 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
         "center_crop_fraction": cfg.center_crop_fraction,
         "feature_order": ["hsv_histogram", "hog_global", "fourier_global", "hog_center", "fourier_center"],
         "classifier": "ExtraTreesClassifier",
+        "mask_guided_features": True,
         "selected_params": state["best_params"],
         "source_weights": cfg.source_weights,
         "n_samples": int(len(state["valid_samples"])),
@@ -615,7 +716,8 @@ def plot_sample_preview(state: dict[str, Any]) -> None:
 
     for ax, sample_index in zip(axes, preview_indices):
         sample = samples[int(sample_index)]
-        img_bgr = _read_sample_bgr(sample, cfg.bbox_margin)
+        img_bgr, mask_u8 = _read_sample_bgr_and_mask(sample, cfg.bbox_margin)
+        img_bgr = compose_masked_card_image(img_bgr, mask_u8)
         ax.imshow(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
         ax.set_title(f"{sample.label} ({sample.source})", fontsize=9)
         ax.axis("off")
@@ -651,7 +753,8 @@ def plot_wrong_predictions(state: dict[str, Any]) -> None:
 
     for ax, (sample_index, true_label, pred_label) in zip(axes, wrong[:show_count]):
         sample = valid_samples[int(sample_index)]
-        img_bgr = _read_sample_bgr(sample, cfg.bbox_margin)
+        img_bgr, mask_u8 = _read_sample_bgr_and_mask(sample, cfg.bbox_margin)
+        img_bgr = compose_masked_card_image(img_bgr, mask_u8)
         ax.imshow(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
         ax.set_title(f"true: {true_label}\npred: {pred_label}", color="red", fontsize=9)
         ax.axis("off")

@@ -41,10 +41,11 @@ class CardSample:
     image_path: Path
     bbox: tuple[int, int, int, int] | None = None
     scene_mask_path: Path | None = None
+    mask_path: Path | None = None
 
 
 # Stages that feed solid-mask references (cards fill the whole crop).
-SOLID_MASK_STAGES = {"reference", "augmented_card"}
+SOLID_MASK_STAGES = {"reference"}
 SCENE_STAGES = {"scene_manual", "scene_predicted"}
 
 
@@ -83,12 +84,15 @@ def load_reference_samples(reference_csv: Path, ref_cards_dir: Path) -> tuple[li
 def load_augmented_card_samples(
     aug_csv: Path,
     aug_cards_dir: Path,
+    aug_masks_dir: Path | None = None,
+    project_root: Path | None = None,
     valid_ext: tuple[str, ...] = (".jpg", ".jpeg", ".png"),
-) -> tuple[list[CardSample], list[str], int, int]:
+) -> tuple[list[CardSample], list[str], int, int, int]:
     samples: list[CardSample] = []
     missing: list[str] = []
     skipped_labels = 0
     skipped_files = 0
+    skipped_masks = 0
 
     with aug_csv.open(newline="", encoding="utf-8") as csv_file:
         for row in csv.DictReader(csv_file):
@@ -111,9 +115,29 @@ def load_augmented_card_samples(
                 missing.append(str(aug_cards_dir / f"{image_id}.jpg"))
                 continue
 
-            samples.append(CardSample("augmented_card", label, image_path))
+            mask_path: Path | None = None
+            mask_path_raw = str(row.get("mask_path", "")).strip()
+            if mask_path_raw:
+                candidate = Path(mask_path_raw)
+                resolved = candidate if candidate.is_absolute() else (
+                    (project_root / candidate) if project_root is not None else (aug_csv.parent / candidate)
+                )
+                if resolved.is_file():
+                    mask_path = resolved
 
-    return samples, missing, skipped_labels, skipped_files
+            if mask_path is None and aug_masks_dir is not None:
+                for suffix in (".png", ".jpg", ".jpeg"):
+                    candidate = aug_masks_dir / f"{image_id}{suffix}"
+                    if candidate.is_file():
+                        mask_path = candidate
+                        break
+
+            if mask_path is None:
+                skipped_masks += 1
+
+            samples.append(CardSample("augmented_card", label, image_path, mask_path=mask_path))
+
+    return samples, missing, skipped_labels, skipped_files, skipped_masks
 
 
 def load_scene_manual_samples(
@@ -217,6 +241,17 @@ def sample_to_crop_and_mask(
     if sample.stage in SOLID_MASK_STAGES:
         mask_crop = np.full(img_crop.shape[:2], 255, dtype=np.uint8)
 
+    elif sample.stage == "augmented_card":
+        if sample.mask_path is not None:
+            aug_mask = cv2.imread(str(sample.mask_path), cv2.IMREAD_GRAYSCALE)
+            if aug_mask is None:
+                raise FileNotFoundError(f"Cannot read augmented-card mask: {sample.mask_path}")
+            if aug_mask.shape[:2] != img_crop.shape[:2]:
+                aug_mask = cv2.resize(aug_mask, (img_crop.shape[1], img_crop.shape[0]), interpolation=cv2.INTER_NEAREST)
+            mask_crop = np.where(aug_mask > 127, 255, 0).astype(np.uint8)
+        else:
+            mask_crop = np.full(img_crop.shape[:2], 255, dtype=np.uint8)
+
     elif sample.stage == "scene_manual":
         if sample.scene_mask_path is None or sample.bbox is None:
             raise ValueError("scene_manual sample requires bbox and scene_mask_path.")
@@ -292,17 +327,16 @@ def augment_card_image_and_mask(
     original_mask = mask_u8.copy()
     h, w = img_bgr.shape[:2]
 
-    if random.random() < 0.85:
-        base_angle = random.uniform(-12.0, 12.0)
-        # Augmented and scene crops are arbitrarily oriented — allow 90° flips.
-        if stage in {"augmented_card", "scene_manual", "scene_predicted"} and random.random() < 0.30:
+    if stage in SCENE_STAGES and random.random() < 0.90:
+        base_angle = random.uniform(-14.0, 14.0)
+        if random.random() < 0.35:
             base_angle += random.choice([90.0, 180.0, 270.0])
-        scale = random.uniform(0.92, 1.08)
-        tx = random.uniform(-0.04, 0.04) * w
-        ty = random.uniform(-0.04, 0.04) * h
+        scale = random.uniform(0.90, 1.10)
+        tx = random.uniform(-0.05, 0.05) * w
+        ty = random.uniform(-0.05, 0.05) * h
         img_bgr, mask_u8 = _warp_affine_pair(img_bgr, mask_u8, base_angle, scale, tx, ty)
 
-    if random.random() < 0.25:
+    if stage in SCENE_STAGES and random.random() < 0.25:
         img_bgr, mask_u8 = _warp_perspective_pair(img_bgr, mask_u8)
 
     if random.random() < 0.65:

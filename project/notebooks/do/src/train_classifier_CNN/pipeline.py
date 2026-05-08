@@ -166,6 +166,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     scene_masks_dir = training_data / "training_masks" / "augmented_scenes"
     aug_csv = training_data / "object_labels" / "augmented_cards" / "aug.csv"
     aug_cards_dir = training_data / "training_images" / "augmented_cards"
+    aug_masks_dir = training_data / "training_masks" / "augmented_cards"
 
     scene_segmenter_path = models_dir / "scene_segmenter_unet_small.pth"
     card_model_path = models_dir / "card_classifier_masked_resnet18_do.pth"
@@ -174,7 +175,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
 
     required_inputs = [
         reference_csv, scene_labels_path, ref_cards_dir, scene_images_dir,
-        scene_masks_dir, aug_csv, aug_cards_dir,
+        scene_masks_dir, aug_csv, aug_cards_dir, aug_masks_dir,
     ]
     for path in required_inputs:
         if not path.exists():
@@ -191,11 +192,12 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     print(f"Training data: {training_data}")
     print(f"Model output dir: {models_dir}")
     print(f"Device: {device}")
+    print(f"Augmented-card masks: {aug_masks_dir}")
 
     # ---------------- sample loading ----------------
     reference_samples, missing_ref = load_reference_samples(reference_csv, ref_cards_dir)
-    augmented_card_samples, missing_aug, skipped_aug_labels, skipped_aug_files = load_augmented_card_samples(
-        aug_csv, aug_cards_dir
+    augmented_card_samples, missing_aug, skipped_aug_labels, skipped_aug_files, skipped_aug_masks = load_augmented_card_samples(
+        aug_csv, aug_cards_dir, aug_masks_dir=aug_masks_dir, project_root=project_root
     )
     scene_manual_samples, missing_scene, skipped_scene_labels, skipped_scene_boxes, skipped_scene_masks = (
         load_scene_manual_samples(scene_labels_path, scene_images_dir, scene_masks_dir, project_root)
@@ -306,7 +308,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     print(f"Scene-manual train/val:      {len(scene_train_samples)}/{len(scene_val_samples)} (per_epoch={scene_manual_per_epoch})")
     print(f"Scene-predicted train:       {len(scene_predicted_train_samples)} (per_epoch={scene_pred_per_epoch})")
     print(f"Num classes:                 {len(label_encoder.classes_)}")
-    print(f"Skipped aug labels/files:    {skipped_aug_labels}/{skipped_aug_files}")
+    print(f"Skipped aug labels/files/masks: {skipped_aug_labels}/{skipped_aug_files}/{skipped_aug_masks}")
     print(f"Skipped scene labels/boxes/masks: {skipped_scene_labels}/{skipped_scene_boxes}/{skipped_scene_masks}")
     if missing_files:
         print(f"Missing files skipped:       {len(missing_files)} (first: {missing_files[0]})")
@@ -693,6 +695,7 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
         "mask_threshold": cfg.mask_threshold,
         "input_mode": "rgb_plus_mask_channel",
         "masked_background_fill": 128,
+        "augmented_cards_use_saved_masks": True,
         "architecture": "torchvision_resnet18",
         "pretrained": False,
         "optimizer": "AdamW",

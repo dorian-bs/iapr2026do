@@ -51,6 +51,7 @@ def initialize_create_augmented_data_pipeline(cfg: CreateAugmentedDataConfig) ->
     print(f"Funky background: {paths.funky_bg_path}")
     print(f"White background: {paths.white_bg_path}")
     print(f"Augmented cards: {paths.aug_cards_dir}")
+    print(f"Augmented card masks: {paths.aug_masks_dir}")
     print(f"Augmented labels: {paths.aug_csv_path}")
     print(f"Scene images: {paths.scenes_img_dir}")
     print(f"Scene masks: {paths.scenes_mask_dir}")
@@ -76,6 +77,11 @@ def _clear_augmented_card_outputs(paths: Paths) -> None:
     """Remove only files produced by this augmented-card generator."""
     paths.aug_cards_dir.mkdir(parents=True, exist_ok=True)
     for output_file in paths.aug_cards_dir.glob("aug_*.jpg"):
+        if output_file.is_file():
+            output_file.unlink()
+
+    paths.aug_masks_dir.mkdir(parents=True, exist_ok=True)
+    for output_file in paths.aug_masks_dir.glob("aug_*.png"):
         if output_file.is_file():
             output_file.unlink()
 
@@ -113,18 +119,27 @@ def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
 
     for aug_index in tqdm(range(total_augmented)):
         asset = card_assets[aug_index % len(card_assets)]
-        aug_img = render_augmented_card(asset, rng_cards, cfg, paths, caches)
+        aug_img, aug_mask = render_augmented_card(asset, rng_cards, cfg, paths, caches)
         image_id = f"aug_{aug_index:05d}"
         image_path = paths.aug_cards_dir / f"{image_id}.jpg"
+        mask_path = paths.aug_masks_dir / f"{image_id}.png"
         cv2.imwrite(str(image_path), aug_img, [int(cv2.IMWRITE_JPEG_QUALITY), 96])
-        aug_rows.append({"image_id": image_id, "card": asset.label})
+        cv2.imwrite(str(mask_path), aug_mask)
+        aug_rows.append(
+            {
+                "image_id": image_id,
+                "card": asset.label,
+                "mask_path": str(mask_path.relative_to(paths.project_root)),
+            }
+        )
 
     with paths.aug_csv_path.open("w", newline="", encoding="utf-8") as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=["image_id", "card"])
+        writer = csv.DictWriter(csv_file, fieldnames=["image_id", "card", "mask_path"])
         writer.writeheader()
         writer.writerows(aug_rows)
 
     print(f"Saved {len(aug_rows)} augmented cards to: {paths.aug_cards_dir}")
+    print(f"Saved {len(aug_rows)} augmented card masks to: {paths.aug_masks_dir}")
     print(f"Saved augmented labels to: {paths.aug_csv_path}")
 
     state["aug_rows"] = aug_rows

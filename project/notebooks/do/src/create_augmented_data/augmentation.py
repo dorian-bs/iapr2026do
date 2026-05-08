@@ -25,8 +25,9 @@ def transform_card(
     target_height: float,
     angle_degrees: float,
     rng: np.random.Generator,
+    apply_rotation: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Resize, lightly color-jitter, and rotate one card crop and mask."""
+    """Resize one card crop+mask, then apply photometric jitter and optional rotation."""
     source_height, source_width = asset.image_bgr.shape[:2]
     scale = float(target_height) / max(1, source_height)
     resized_width = max(1, int(round(source_width * scale)))
@@ -35,9 +36,16 @@ def transform_card(
     resized_image = cv2.resize(asset.image_bgr, (resized_width, resized_height), interpolation=cv2.INTER_AREA)
     resized_mask = cv2.resize(asset.mask, (resized_width, resized_height), interpolation=cv2.INTER_NEAREST)
 
-    alpha = float(rng.uniform(0.92, 1.08))
-    beta = float(rng.uniform(-8, 8))
+    alpha = float(rng.uniform(0.88, 1.14))
+    beta = float(rng.uniform(-16, 16))
     resized_image = cv2.convertScaleAbs(resized_image, alpha=alpha, beta=beta)
+    noise_std = float(rng.uniform(0.0, 5.5))
+    if noise_std > 0.1:
+        noise = rng.normal(0.0, noise_std, size=resized_image.shape).astype(np.float32)
+        resized_image = np.clip(resized_image.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+
+    if not apply_rotation or abs(float(angle_degrees)) < 1e-6:
+        return resized_image, (resized_mask > 127).astype(np.uint8) * 255
 
     center = (resized_width / 2.0, resized_height / 2.0)
     rotation_matrix = cv2.getRotationMatrix2D(center, float(angle_degrees), 1.0)
@@ -387,16 +395,22 @@ def render_augmented_card(
     cfg: CreateAugmentedDataConfig,
     paths: Paths,
     caches: AssetCaches,
-) -> np.ndarray:
-    """Render one card crop on a simple synthetic background."""
+) -> tuple[np.ndarray, np.ndarray]:
+    """Render one single-card crop plus its aligned binary mask."""
     canvas_h, canvas_w = cfg.aug_card_canvas
-    target_height = float(rng.uniform(*cfg.aug_card_height_range))
-    angle_degrees = float(rng.uniform(*cfg.aug_card_angle_range_deg))
+
+    source_h, source_w = asset.image_bgr.shape[:2]
+    max_h = int(round(canvas_h * 0.82))
+    max_w = int(round(canvas_w * 0.82))
+    fit_scale = min(max_h / max(1, source_h), max_w / max(1, source_w), 1.0)
+    target_height = float(max(1, int(round(source_h * fit_scale))))
+
     patch_bgr, patch_mask = transform_card(
         asset,
         target_height=target_height,
-        angle_degrees=angle_degrees,
+        angle_degrees=0.0,
         rng=rng,
+        apply_rotation=False,
     )
 
     if rng.random() < 0.6:
@@ -431,8 +445,7 @@ def render_augmented_card(
         x1 = min(canvas_w, int(xs.max()) + 1 + padding)
         y1 = min(canvas_h, int(ys.max()) + 1 + padding)
         canvas = canvas[y0:y1, x0:x1]
+        instance_map = instance_map[y0:y1, x0:x1]
 
-    if rng.random() < 0.2:
-        canvas = cv2.GaussianBlur(canvas, (3, 3), sigmaX=0.0)
-
-    return canvas
+    card_mask = np.where(instance_map > 0, 255, 0).astype(np.uint8)
+    return canvas, card_mask
