@@ -22,7 +22,8 @@ import torch
 import torch.nn as nn
 from matplotlib.patches import Rectangle
 
-from src.shared.card_models import CardResNet18Classifier, SceneUNetSmall, assert_param_cap
+from src.shared.card_models import SceneUNetSmall, assert_param_cap, build_card_classifier
+from src.shared.model_paths import resolve_classifier_bundle, resolve_segmenter_checkpoint
 from src.shared.card_pipeline_old import (
     IMAGENET_MEAN,
     IMAGENET_STD,
@@ -98,13 +99,16 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
     train_images_dir = challenge_dir / "train_images"
     test_images_dir = challenge_dir / "test_images"
 
-    seg_model_path = models_dir / "scene_segmenter_unet_small.pth"
-    classifier_path = models_dir / "card_classifier_masked_resnet18_do.pth"
-    classes_path = models_dir / "card_classifier_masked_resnet18_classes_do.npy"
-    classifier_config_path = models_dir / "card_classifier_masked_resnet18_config_do.json"
+    seg_model_path = resolve_segmenter_checkpoint(models_dir)
+    classifier_bundle = resolve_classifier_bundle(models_dir)
+    classifier_bundle_dir = classifier_bundle["bundle_dir"]
+    classifier_path = classifier_bundle["model_path"]
+    classes_path = classifier_bundle["classes_path"]
+    classifier_config_path = classifier_bundle["config_path"]
 
     print(f"Project root: {project_root}")
     print(f"Segmenter:    {seg_model_path}")
+    print(f"Classifier bundle: {classifier_bundle_dir}")
     print(f"Classifier:   {classifier_path}")
 
     for path in (seg_model_path, classifier_path, classes_path):
@@ -118,7 +122,7 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
     card_img_size = int(cfg.card_img_size)
     card_mask_threshold = float(cfg.card_mask_threshold)
     classifier_config: dict[str, Any] = {}
-    if classifier_config_path.is_file():
+    if classifier_config_path is not None and classifier_config_path.is_file():
         with classifier_config_path.open("r", encoding="utf-8") as f:
             loaded = json.load(f)
         if isinstance(loaded, dict):
@@ -138,17 +142,33 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
     segmenter.load_state_dict(torch.load(str(seg_model_path), map_location=device))
     segmenter.eval()
 
+    checkpoint = torch.load(classifier_path, map_location=device)
     card_classes = np.load(classes_path, allow_pickle=True)
     input_channels = int(classifier_config.get("input_channels", 4)) if classifier_config else 4
-    card_classifier = CardResNet18Classifier(n_classes=len(card_classes), input_channels=input_channels).to(device)
-    assert_param_cap(card_classifier, "CardResNet18Classifier")
+    classifier_arch = str(classifier_config.get("architecture", "torchvision_resnet18"))
+    classifier_stem_width = int(classifier_config.get("classifier_stem_width", 60))
+    classifier_dropout = float(classifier_config.get("classifier_dropout", 0.20))
+    if isinstance(checkpoint, dict):
+        classifier_arch = str(checkpoint.get("architecture", classifier_arch))
+        classifier_stem_width = int(checkpoint.get("stem_width", classifier_stem_width))
+        classifier_dropout = float(checkpoint.get("dropout", classifier_dropout))
 
-    checkpoint = torch.load(classifier_path, map_location=device)
+    card_classifier, classifier_arch = build_card_classifier(
+        n_classes=len(card_classes),
+        input_channels=input_channels,
+        dropout=classifier_dropout,
+        architecture=classifier_arch,
+        stem_width=classifier_stem_width,
+    )
+    card_classifier = card_classifier.to(device)
+    assert_param_cap(card_classifier, f"CardClassifier[{classifier_arch}]")
+
     state_dict = checkpoint["state_dict"] if isinstance(checkpoint, dict) and "state_dict" in checkpoint else checkpoint
     card_classifier.load_state_dict(state_dict)
     card_classifier.eval()
 
     print(f"Loaded masked classifier with {len(card_classes)} classes.")
+    print(f"Classifier architecture: {classifier_arch} (stem_width={classifier_stem_width})")
     print(f"Card image size: {card_img_size} | mask threshold: {card_mask_threshold} | input channels: {input_channels}")
     print(f"Device: {device}")
 
@@ -192,6 +212,7 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
         "project_root": project_root,
         "training_data": training_data,
         "models_dir": models_dir,
+        "classifier_bundle_dir": classifier_bundle_dir,
         "challenge_dir": challenge_dir,
         "train_images_dir": train_images_dir,
         "test_images_dir": test_images_dir,
@@ -399,7 +420,7 @@ def _bag_f1(pred_cards: list[str], true_cards: list[str]) -> float:
 def _segmenter_card_count_metrics(
     pred_rows: list[dict[str, Any]],
     true_summary: dict[str, str],
-) -> tuple[int, int, int, float, float]:
+) -> tuple[int, int, int, int, int, float]:
     true_counts = {
         "center": 0 if str(true_summary["center_card"]).strip().upper() == "EMPTY" else 1,
         "p1": len(_parse_cards_field(true_summary["player_1_cards"])),
@@ -414,12 +435,13 @@ def _segmenter_card_count_metrics(
             pred_counts[region] += 1
 
     true_total = int(sum(true_counts.values()))
-    # Region-wise deficits prevent over-detections in one region from hiding misses in another.
-    not_found_total = int(sum(max(0, true_counts[k] - pred_counts[k]) for k in true_counts))
-    found_total = true_total - not_found_total
-    not_found_rate = float(not_found_total / true_total) if true_total > 0 else 0.0
-    found_recall = float(found_total / true_total) if true_total > 0 else 1.0
-    return true_total, found_total, not_found_total, not_found_rate, found_recall
+    pred_total = int(sum(pred_counts.values()))
+    count_diff = pred_total - true_total
+    abs_count_diff = abs(count_diff)
+    # Region-wise absolute variation avoids cancellation between over/under counts across players.
+    region_abs_diff = int(sum(abs(pred_counts[k] - true_counts[k]) for k in true_counts))
+    count_quality = 1.0 / (1.0 + float(abs_count_diff))
+    return true_total, pred_total, count_diff, abs_count_diff, region_abs_diff, count_quality
 
 
 def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -480,10 +502,10 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
         ]
         center_acc = float(pred_summary["center_card"] == true_summary["center_card"])
         image_score = float(np.mean([center_acc] + f1s))
-        true_total_cards, found_cards, not_found_cards, not_found_rate, segmenter_recall = (
+        true_total_cards, pred_total_cards, count_diff, abs_count_diff, region_abs_diff, count_quality = (
             _segmenter_card_count_metrics(pred_rows, true_summary)
         )
-        image_score_strict = float(np.mean([center_acc] + f1s + [segmenter_recall]))
+        image_score_strict = float(np.mean([center_acc] + f1s + [count_quality]))
 
         results.append({
             "image_id": image_id_local,
@@ -496,10 +518,11 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
             "image_score": image_score,
             "image_score_strict": image_score_strict,
             "true_card_count": true_total_cards,
-            "found_card_count": found_cards,
-            "not_found_count": not_found_cards,
-            "not_found_rate": not_found_rate,
-            "segmenter_card_recall": segmenter_recall,
+            "pred_card_count": pred_total_cards,
+            "card_count_diff": count_diff,
+            "abs_card_count_diff": abs_count_diff,
+            "region_abs_card_count_diff": region_abs_diff,
+            "segmenter_count_quality": count_quality,
         })
 
         if row_index % 25 == 0 or row_index == len(gt_rows):
@@ -514,26 +537,30 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
     overall = float(np.mean([r["image_score"] for r in results]))
     overall_strict = float(np.mean([r["image_score_strict"] for r in results]))
     total_true_cards = int(sum(r["true_card_count"] for r in results))
-    total_found_cards = int(sum(r["found_card_count"] for r in results))
-    total_not_found_cards = int(sum(r["not_found_count"] for r in results))
-    cards_not_found_rate = float(total_not_found_cards / total_true_cards) if total_true_cards > 0 else 0.0
-    segmenter_card_recall = float(total_found_cards / total_true_cards) if total_true_cards > 0 else 1.0
+    total_pred_cards = int(sum(r["pred_card_count"] for r in results))
+    avg_signed_card_count_diff = float(np.mean([r["card_count_diff"] for r in results]))
+    avg_abs_card_count_diff = float(np.mean([r["abs_card_count_diff"] for r in results]))
+    avg_region_abs_card_count_diff = float(np.mean([r["region_abs_card_count_diff"] for r in results]))
+    segmenter_count_quality = float(np.mean([r["segmenter_count_quality"] for r in results]))
 
     print("\nBenchmark summary (masked classifier on original labeled data):")
     print(f"  Center-card accuracy: {center_acc * 100:.2f}%")
     print(f"  Player F1: p1={p_means[0]:.3f}, p2={p_means[1]:.3f}, p3={p_means[2]:.3f}, p4={p_means[3]:.3f}")
     print(f"  Macro player F1: {macro_f1:.3f}")
     print(f"  Overall image score:  {overall:.3f}")
-    print(f"  Overall strict score: {overall_strict:.3f} (includes segmenter card-recall penalty)")
-    print(f"  Segmenter card recall: {segmenter_card_recall:.3f} ({total_found_cards}/{total_true_cards})")
-    print(f"  Cards not found: {total_not_found_cards}/{total_true_cards} ({cards_not_found_rate * 100:.2f}%)")
+    print(f"  Overall strict score: {overall_strict:.3f} (includes segmenter count-variation quality)")
+    print(f"  Segmenter avg |pred-true| cards/image: {avg_abs_card_count_diff:.3f}")
+    print(f"  Segmenter avg (pred-true) cards/image: {avg_signed_card_count_diff:.3f}")
+    print(f"  Segmenter avg region variation/image:  {avg_region_abs_card_count_diff:.3f}")
+    print(f"  Segmenter total cards: pred={total_pred_cards}, true={total_true_cards}")
+    print(f"  Segmenter count-quality score: {segmenter_count_quality:.3f}")
     print("  Note: active_player is not scored yet (not predicted by this pipeline).")
 
     metric_names = [
         "center_acc", "p1_f1", "p2_f1", "p3_f1", "p4_f1", "macro_f1",
-        "seg_recall", "overall", "overall_strict",
+        "seg_count_quality", "overall", "overall_strict",
     ]
-    metric_values = [center_acc] + p_means + [macro_f1, segmenter_card_recall, overall, overall_strict]
+    metric_values = [center_acc] + p_means + [macro_f1, segmenter_count_quality, overall, overall_strict]
     image_scores = [r["image_score"] for r in results]
     bin_count = min(24, max(8, int(np.sqrt(len(image_scores)))))
 
@@ -572,11 +599,12 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
         "macro_f1": macro_f1,
         "overall": overall,
         "overall_strict": overall_strict,
-        "cards_total": total_true_cards,
-        "cards_found_total": total_found_cards,
-        "cards_not_found_total": total_not_found_cards,
-        "cards_not_found_rate": cards_not_found_rate,
-        "segmenter_card_recall": segmenter_card_recall,
+        "cards_total_true": total_true_cards,
+        "cards_total_pred": total_pred_cards,
+        "avg_signed_card_count_diff": avg_signed_card_count_diff,
+        "avg_abs_card_count_diff": avg_abs_card_count_diff,
+        "avg_region_abs_card_count_diff": avg_region_abs_card_count_diff,
+        "segmenter_count_quality": segmenter_count_quality,
         "worst_results": worst_results,
         "top_results": top_results,
     }

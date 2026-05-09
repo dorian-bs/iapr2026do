@@ -33,7 +33,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import DataLoader
 
-from src.shared.card_models import CardResNet18Classifier, assert_param_cap
+from src.shared.card_models import assert_param_cap, build_card_classifier
 from src.shared.card_pipeline import (
     IMAGENET_MEAN,
     IMAGENET_STD,
@@ -53,6 +53,10 @@ from src.shared.card_data import (
     load_scene_manual_samples,
     make_loader,
     sample_to_crop_and_mask,
+)
+from src.shared.model_paths import (
+    get_classifier_output_bundle_dir,
+    resolve_segmenter_checkpoint,
 )
 
 
@@ -99,6 +103,10 @@ class TrainPipelineConfig:
     grad_clip_norm: float = 1.0
 
     preview_per_stage: int = 3
+
+    classifier_architecture: str = "resnet18_small"
+    classifier_stem_width: int = 60
+    classifier_dropout: float = 0.20
 
 
 # --------------------------------------------------------------------------- #
@@ -158,7 +166,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     project_dir = project_root / "project"
     training_data = project_dir / "training_data"
     models_dir = project_dir / "models"
-    models_dir.mkdir(parents=True, exist_ok=True)
+    classifier_bundle_dir = get_classifier_output_bundle_dir(models_dir, bundle_name="latest")
 
     reference_csv = training_data / "object_labels" / "reference_cards" / "reference_do.csv"
     scene_labels_path = training_data / "object_labels" / "augmented_scenes" / "labels.json"
@@ -169,10 +177,10 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     aug_cards_dir = training_data / "training_images" / "augmented_cards"
     aug_masks_dir = training_data / "training_masks" / "augmented_cards"
 
-    scene_segmenter_path = models_dir / "scene_segmenter_unet_small.pth"
-    card_model_path = models_dir / "card_classifier_masked_resnet18_do.pth"
-    card_classes_path = models_dir / "card_classifier_masked_resnet18_classes_do.npy"
-    card_config_path = models_dir / "card_classifier_masked_resnet18_config_do.json"
+    scene_segmenter_path = resolve_segmenter_checkpoint(models_dir)
+    card_model_path = classifier_bundle_dir / "card_classifier.pth"
+    card_classes_path = classifier_bundle_dir / "classes.npy"
+    card_config_path = classifier_bundle_dir / "config.json"
 
     required_inputs = [
         reference_csv, scene_labels_path, ref_cards_dir, scene_images_dir,
@@ -197,6 +205,8 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     print(f"Project root: {project_root}")
     print(f"Training data: {training_data}")
     print(f"Model output dir: {models_dir}")
+    print(f"Classifier output bundle: {classifier_bundle_dir}")
+    print(f"Segmenter checkpoint: {scene_segmenter_path}")
     print(f"Device: {device}")
     print(f"Augmented-card masks: {aug_masks_dir}")
 
@@ -310,8 +320,15 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     )
 
     # ---------------- model ----------------
-    model = CardResNet18Classifier(n_classes=len(label_encoder.classes_), input_channels=4).to(device)
-    model_params = assert_param_cap(model, "CardResNet18Classifier")
+    model, classifier_arch = build_card_classifier(
+        n_classes=len(label_encoder.classes_),
+        input_channels=4,
+        dropout=cfg.classifier_dropout,
+        architecture=cfg.classifier_architecture,
+        stem_width=cfg.classifier_stem_width,
+    )
+    model = model.to(device)
+    model_params = assert_param_cap(model, f"CardClassifier[{classifier_arch}]")
 
     ce_loss = nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if device.type == "cuda" else None
@@ -334,6 +351,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         "project_dir": project_dir,
         "training_data": training_data,
         "models_dir": models_dir,
+        "classifier_bundle_dir": classifier_bundle_dir,
         "device": device,
         "use_amp": use_amp,
         "batch_size": batch_size,
@@ -372,6 +390,9 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         "best_stage": None,
         "best_epoch": None,
         "training_seconds": None,
+        "classifier_architecture": classifier_arch,
+        "classifier_stem_width": int(cfg.classifier_stem_width),
+        "classifier_dropout": float(cfg.classifier_dropout),
     }
 
 
@@ -802,14 +823,20 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
     card_model_path: Path = state["card_model_path"]
     card_classes_path: Path = state["card_classes_path"]
     card_config_path: Path = state["card_config_path"]
+    classifier_architecture = str(state.get("classifier_architecture", "torchvision_resnet18"))
+    classifier_stem_width = int(state.get("classifier_stem_width", 60))
+    classifier_dropout = float(state.get("classifier_dropout", 0.20))
 
     torch.save(
         {
             "state_dict": model.state_dict(),
-            "model_name": "CardResNet18Classifier",
+            "model_name": model.__class__.__name__,
             "n_classes": int(len(label_encoder.classes_)),
             "img_size": cfg.img_size,
             "input_channels": 4,
+            "architecture": classifier_architecture,
+            "stem_width": classifier_stem_width,
+            "dropout": classifier_dropout,
         },
         card_model_path,
     )
@@ -826,7 +853,9 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
         "input_mode": "rgb_plus_mask_channel",
         "masked_background_fill": 128,
         "augmented_cards_use_saved_masks": True,
-        "architecture": "torchvision_resnet18",
+        "architecture": classifier_architecture,
+        "classifier_stem_width": classifier_stem_width,
+        "classifier_dropout": classifier_dropout,
         "pretrained": False,
         "optimizer": "AdamW",
         "weight_decay": cfg.weight_decay,
@@ -845,6 +874,7 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
         "best_val_accuracy": float(state.get("best_val_acc") or 0.0),
         "best_stage": state.get("best_stage"),
         "best_epoch": int(state.get("best_epoch") or -1),
+        "trainable_params": int(state.get("model_params") or 0),
         "seed": cfg.seed,
     }
 
