@@ -12,8 +12,10 @@ project/L1000768/**/*.jpg
 
 # ignore training data
 project/training_data/training_images/**/*.jpg
+project/training_data/training_images/**/*.png
 project/training_data/training_masks/**/*.jpg
 project/training_data/training_masks/**/*.png
+project/training_data/reference_manual_masks/*.afphoto
 
 # ignore models
 project/models/
