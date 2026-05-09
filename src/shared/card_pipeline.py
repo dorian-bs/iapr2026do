@@ -14,6 +14,8 @@ import cv2
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision.transforms.functional as TF
+from PIL import Image
 
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -108,20 +110,25 @@ def letterbox_for_segmenter(
     img_bgr: np.ndarray,
     target_size: int,
     fill: int = 255,
-) -> tuple[np.ndarray, dict[str, int]]:
-    h, w = img_bgr.shape[:2]
+) -> tuple[Image.Image, dict[str, int]]:
+    """Letterbox scene image using the same PIL path as segmenter training."""
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    img_pil = Image.fromarray(img_rgb)
+
+    w, h = img_pil.size
     scale = min(target_size / w, target_size / h)
     new_w = max(1, int(round(w * scale)))
     new_h = max(1, int(round(h * scale)))
-    resized = cv2.resize(img_bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    resized = img_pil.resize((new_w, new_h), Image.BILINEAR)
 
     pad_w = target_size - new_w
     pad_h = target_size - new_h
     left = pad_w // 2
     top = pad_h // 2
+    right = pad_w - left
+    bottom = pad_h - top
 
-    canvas = np.full((target_size, target_size, 3), fill, dtype=np.uint8)
-    canvas[top:top + new_h, left:left + new_w] = resized
+    canvas = TF.pad(resized, (left, top, right, bottom), fill=fill)
     meta = {
         "orig_w": w,
         "orig_h": h,
@@ -150,11 +157,8 @@ def segment_scene_probability(
 ) -> np.ndarray:
     """Run the scene segmenter on a full-size image and return a HxW prob map."""
     img_lb, meta = letterbox_for_segmenter(img_bgr, target_size=target_size)
-    x_rgb = cv2.cvtColor(img_lb, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
-    x = torch.from_numpy(np.transpose(x_rgb, (2, 0, 1))).float()
-    mean = torch.tensor(IMAGENET_MEAN, dtype=x.dtype).view(3, 1, 1)
-    std = torch.tensor(IMAGENET_STD, dtype=x.dtype).view(3, 1, 1)
-    x = (x - mean) / std
+    x = TF.to_tensor(img_lb)
+    x = TF.normalize(x, mean=IMAGENET_MEAN.tolist(), std=IMAGENET_STD.tolist())
     x = x.unsqueeze(0).to(device)
     prob_lb = torch.sigmoid(model(x))[0, 0].cpu().numpy()
     return unletterbox_probability(prob_lb, meta)

@@ -685,12 +685,33 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             train_metrics = _train_one_epoch(
                 model, stage_loader, optimizer, ce_loss, scaler, use_amp, device, cfg, stage_kind
             )
-            val_metrics = _evaluate_one_epoch(model, val_loader, ce_loss, use_amp, device)
-            # Stage-4 mirrors test-time: also report predicted-mask val accuracy
-            # so we can see if the model actually generalizes to segmenter outputs.
-            val_pred_metrics = _evaluate_one_epoch(model, val_loader_predicted, ce_loss, use_amp, device)
 
-            scheduler.step(val_metrics["cls_acc"])
+            # Runtime fix: run exactly one full validation pass per epoch.
+            # Stage-4 uses predicted-mask validation (test-time realistic);
+            # earlier stages use manual-mask validation.
+            val_metrics: dict[str, float]
+            val_pred_metrics: dict[str, float]
+            val_metric_name: str
+            if stage_kind == "scene_predicted":
+                val_metrics = {
+                    "loss": float("nan"),
+                    "cls_acc": float("nan"),
+                    "skipped_non_finite_batches": 0.0,
+                }
+                val_pred_metrics = _evaluate_one_epoch(model, val_loader_predicted, ce_loss, use_amp, device)
+                stage_val_acc = float(val_pred_metrics["cls_acc"])
+                val_metric_name = "pred"
+            else:
+                val_metrics = _evaluate_one_epoch(model, val_loader, ce_loss, use_amp, device)
+                val_pred_metrics = {
+                    "loss": float("nan"),
+                    "cls_acc": float("nan"),
+                    "skipped_non_finite_batches": 0.0,
+                }
+                stage_val_acc = float(val_metrics["cls_acc"])
+                val_metric_name = "manual"
+
+            scheduler.step(stage_val_acc)
             lr_now = float(optimizer.param_groups[0]["lr"])
             epoch_seconds = float(time.perf_counter() - epoch_start)
 
@@ -707,7 +728,11 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 "seconds": epoch_seconds,
                 "samples_per_epoch": int(samples_per_epoch),
                 "train_skipped_non_finite_batches": int(train_metrics["skipped_non_finite_batches"]),
-                "val_skipped_non_finite_batches": int(val_metrics["skipped_non_finite_batches"]),
+                "val_skipped_non_finite_batches": int(
+                    val_pred_metrics["skipped_non_finite_batches"]
+                    if stage_kind == "scene_predicted"
+                    else val_metrics["skipped_non_finite_batches"]
+                ),
             }
             history.append(row)
 
@@ -717,16 +742,16 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             if last_stage_name != stage_name:
                 last_stage_name = stage_name
                 last_stage_best_val_acc = -1.0
-            selection_acc = val_pred_metrics["cls_acc"] if stage_kind == "scene_predicted" else val_metrics["cls_acc"]
+            selection_acc = stage_val_acc
             is_stage_best = selection_acc > last_stage_best_val_acc
             if is_stage_best:
                 last_stage_best_val_acc = float(selection_acc)
                 last_stage_best_state_dict = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 last_stage_best_epoch = epoch
 
-            stage_improved = val_metrics["cls_acc"] > stage_best_val_acc + 1e-6
+            stage_improved = stage_val_acc > stage_best_val_acc + 1e-6
             if stage_improved:
-                stage_best_val_acc = float(val_metrics["cls_acc"])
+                stage_best_val_acc = float(stage_val_acc)
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
@@ -734,8 +759,7 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             print(
                 f"  epoch {epoch:02d}/{stage_epochs} | "
                 f"train_acc={train_metrics['cls_acc']*100:5.1f}% loss={train_metrics['loss']:.3f} | "
-                f"val(manual)={val_metrics['cls_acc']*100:5.1f}% "
-                f"val(pred)={val_pred_metrics['cls_acc']*100:5.1f}% | "
+                f"val({val_metric_name})={stage_val_acc*100:5.1f}% | "
                 f"lr={lr_now:.2e} | {epoch_seconds:.1f}s"
                 + (" | stage-best" if is_stage_best else "")
             )

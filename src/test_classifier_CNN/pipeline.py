@@ -24,7 +24,7 @@ from matplotlib.patches import Rectangle
 
 from src.shared.card_models import SceneUNetSmall, assert_param_cap, build_card_classifier
 from src.shared.model_paths import resolve_classifier_bundle, resolve_segmenter_checkpoint
-from src.shared.card_pipeline_old import (
+from src.shared.card_pipeline import (
     IMAGENET_MEAN,
     IMAGENET_STD,
     assign_region,
