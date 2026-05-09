@@ -42,7 +42,8 @@ class CreateAugmentedDataConfig:
 
     # Token placement hyperparameters.
     token_inward_distance_fraction_range: tuple[float, float] = (0.0, 0.05)
-    token_lateral_distance_fraction_range: tuple[float, float] = (0.35, 0.50)
+    # Scale both bounds down to keep side offsets closer to players.
+    token_lateral_distance_fraction_range: tuple[float, float] = (0.23, 0.33)
     token_side_mode: str = "right"  # right | left | center | random
     token_center_jitter_fraction: float = 0.008
     token_clamp_margin_fraction: float = 0.02
