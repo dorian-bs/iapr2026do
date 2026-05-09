@@ -320,7 +320,7 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
     training_root = project_root / "project" / "training_data"
     scene_images_dir = training_root / "training_images" / "augmented_scenes"
     scene_masks_dir = training_root / "training_masks" / "augmented_scenes"
-    models_dir = project_root / "project" / "models"
+    models_dir = project_root / "project" / "models" / "segmenter" / "used"
     models_dir.mkdir(parents=True, exist_ok=True)
 
     if not scene_images_dir.exists():
