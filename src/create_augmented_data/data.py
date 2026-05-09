@@ -555,7 +555,7 @@ def token_target_size(style_key: str, player_name: str, scene_height: int) -> tu
     """Choose a token canvas size that fits each player side."""
     base_size = max(28, int(round(scene_height * 0.055)))
     if style_key == "white_rect":
-        rect_scale = 3
+        rect_scale = 2
         if player_name in ("p2", "p4"):
             return base_size * 2 * rect_scale, base_size * rect_scale
         return base_size * rect_scale, base_size * 2 * rect_scale

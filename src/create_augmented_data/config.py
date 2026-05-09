@@ -16,6 +16,9 @@ class CreateAugmentedDataConfig:
     aug_card_height_range: tuple[int, int] = (140, 220)
     aug_card_angle_range_deg: tuple[float, float] = (-25.0, 25.0)
     aug_card_shift_fraction: float = 0.12
+    # RGB card output: JPEG is usually a better speed/size tradeoff for training.
+    aug_card_image_format: str = "jpg"  # png | jpg | jpeg
+    aug_card_jpeg_quality: int = 92
 
     # Scene generation knobs.
     n_scenes: int = 4000
@@ -39,6 +42,9 @@ class CreateAugmentedDataConfig:
     center_position_fraction_range_x: tuple[float, float] = (0.40, 0.70)
     center_position_fraction_range_y: tuple[float, float] = (0.40, 0.70)
     center_angle_range_deg: tuple[float, float] = (-70.0, 70.0)
+    # RGB scene output: JPEG reduces storage and typically speeds up loading.
+    scene_image_format: str = "jpg"  # png | jpg | jpeg
+    scene_jpeg_quality: int = 90
 
     # Token placement hyperparameters.
     token_inward_distance_fraction_range: tuple[float, float] = (0.0, 0.05)

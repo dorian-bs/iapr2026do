@@ -90,7 +90,7 @@ class TrainPipelineConfig:
     batch_size_cuda: int = 32
     batch_size_mps: int = 16
     batch_size_cpu: int = 8
-    num_workers: int = 0
+    num_workers: int = 4
 
     reference_target_gpu_mps: int = 1536
     reference_target_cpu: int = 512

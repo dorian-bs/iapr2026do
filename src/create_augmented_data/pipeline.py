@@ -37,6 +37,28 @@ except ImportError:  # pragma: no cover - tqdm is optional
         return values
 
 
+def _normalize_image_format(value: str) -> str:
+    fmt = str(value).strip().lower().lstrip(".")
+    if fmt == "jpeg":
+        return "jpg"
+    if fmt in {"jpg", "png"}:
+        return fmt
+    raise ValueError(f"Unsupported image format: {value}. Use one of: png, jpg, jpeg.")
+
+
+def _clamp_jpeg_quality(value: int) -> int:
+    return max(1, min(100, int(value)))
+
+
+def _write_rgb_image(path, img_bgr: np.ndarray, fmt: str, jpeg_quality: int) -> None:
+    params: list[int] = []
+    if fmt == "jpg":
+        params = [int(cv2.IMWRITE_JPEG_QUALITY), _clamp_jpeg_quality(jpeg_quality)]
+    ok = cv2.imwrite(str(path), img_bgr, params) if params else cv2.imwrite(str(path), img_bgr)
+    if not ok:
+        raise OSError(f"Failed to write image: {path}")
+
+
 def initialize_create_augmented_data_pipeline(cfg: CreateAugmentedDataConfig) -> dict[str, Any]:
     """Resolve paths, prepare output dirs, load card assets, and prime caches."""
     paths = resolve_paths()
@@ -44,6 +66,8 @@ def initialize_create_augmented_data_pipeline(cfg: CreateAugmentedDataConfig) ->
     caches = build_asset_caches(paths)
     card_assets = load_reference_card_assets(paths)
     labels_loaded = sorted({asset.label for asset in card_assets})
+    card_fmt = _normalize_image_format(cfg.aug_card_image_format)
+    scene_fmt = _normalize_image_format(cfg.scene_image_format)
 
     print(f"Project root: {paths.project_root}")
     print(f"Reference cards: {paths.ref_cards_dir}")
@@ -55,6 +79,8 @@ def initialize_create_augmented_data_pipeline(cfg: CreateAugmentedDataConfig) ->
     print(f"Augmented labels: {paths.aug_csv_path}")
     print(f"Scene images: {paths.scenes_img_dir}")
     print(f"Scene masks: {paths.scenes_mask_dir}")
+    print(f"Card image format: {card_fmt} (jpeg_quality={_clamp_jpeg_quality(cfg.aug_card_jpeg_quality)})")
+    print(f"Scene image format: {scene_fmt} (jpeg_quality={_clamp_jpeg_quality(cfg.scene_jpeg_quality)})")
     print(f"Token crop folders: {paths.token_asset_dir}")
     print(f"Loaded {len(card_assets)} reference crops across {len(labels_loaded)} labels.")
 
@@ -117,14 +143,15 @@ def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
     rng_cards = np.random.default_rng(cfg.seed + 1)
     total_augmented = len(card_assets) * cfg.n_aug_per_reference
     aug_rows: list[dict[str, str]] = []
+    card_fmt = _normalize_image_format(cfg.aug_card_image_format)
 
     for aug_index in tqdm(range(total_augmented)):
         asset = card_assets[aug_index % len(card_assets)]
         aug_img, aug_mask = render_augmented_card(asset, rng_cards, cfg, paths, caches)
         image_id = f"aug_{aug_index:05d}"
-        image_path = paths.aug_cards_dir / f"{image_id}.png"
+        image_path = paths.aug_cards_dir / f"{image_id}.{card_fmt}"
         mask_path = paths.aug_masks_dir / f"{image_id}.png"
-        cv2.imwrite(str(image_path), aug_img)
+        _write_rgb_image(image_path, aug_img, fmt=card_fmt, jpeg_quality=cfg.aug_card_jpeg_quality)
         cv2.imwrite(str(mask_path), aug_mask)
         aug_rows.append(
             {
@@ -178,16 +205,17 @@ def run_scene_generation(state: dict[str, Any]) -> dict[str, Any]:
 
     rng_dataset = np.random.default_rng(cfg.seed)
     all_scene_metadata: list[dict[str, Any]] = []
+    scene_fmt = _normalize_image_format(cfg.scene_image_format)
 
     for scene_index in tqdm(range(cfg.n_scenes)):
         scene_bgr, scene_mask, scene_metadata = compose_augmented_scene(
             card_assets, rng_dataset, cfg, paths, caches
         )
         scene_name = f"aug_scene_{scene_index:05d}"
-        image_path = paths.scenes_img_dir / f"{scene_name}.png"
+        image_path = paths.scenes_img_dir / f"{scene_name}.{scene_fmt}"
         mask_path = paths.scenes_mask_dir / f"{scene_name}.png"
 
-        cv2.imwrite(str(image_path), scene_bgr)
+        _write_rgb_image(image_path, scene_bgr, fmt=scene_fmt, jpeg_quality=cfg.scene_jpeg_quality)
         cv2.imwrite(str(mask_path), scene_mask)
 
         scene_metadata = {
