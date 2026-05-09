@@ -150,14 +150,22 @@ def read_reference_labels(reference_csv: Path) -> dict[str, str]:
 
 
 def load_crop_aligned_mask(tag_dir: Path, crop_index: int, target_shape: tuple[int, int]) -> np.ndarray:
-    """Load masks/mask_i.jpg, with a closed-component fallback for older outputs."""
+    """Load aligned crop masks with PNG/JPG support and closed-component fallback."""
     target_height, target_width = target_shape
-    mask_path = tag_dir / "masks" / f"mask_{crop_index}.jpg"
-    mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+    mask = None
+    for suffix in (".png", ".jpg", ".jpeg"):
+        mask_path = tag_dir / "masks" / f"mask_{crop_index}{suffix}"
+        mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+        if mask is not None:
+            break
 
     if mask is None:
-        closed_path = tag_dir / "closed_components" / f"closed_component_{crop_index}.jpg"
-        closed_mask = cv2.imread(str(closed_path), cv2.IMREAD_GRAYSCALE)
+        closed_mask = None
+        for suffix in (".png", ".jpg", ".jpeg"):
+            closed_path = tag_dir / "closed_components" / f"closed_component_{crop_index}{suffix}"
+            closed_mask = cv2.imread(str(closed_path), cv2.IMREAD_GRAYSCALE)
+            if closed_mask is not None:
+                break
         if closed_mask is not None and np.count_nonzero(closed_mask) > 0:
             bbox_x, bbox_y, bbox_width, bbox_height = cv2.boundingRect(closed_mask)
             mask = closed_mask[bbox_y:bbox_y + bbox_height, bbox_x:bbox_x + bbox_width]
@@ -170,28 +178,75 @@ def load_crop_aligned_mask(tag_dir: Path, crop_index: int, target_shape: tuple[i
     return (mask > 127).astype(np.uint8) * 255
 
 
+def _collect_reference_crop_indices(tag_dir: Path) -> list[int]:
+    indices: set[int] = set()
+    for pattern in (
+        "crops_rgba/crop_*.png",
+        "crops/crop_*.png",
+        "crops/crop_*.jpg",
+        "crops/crop_*.jpeg",
+    ):
+        for crop_path in tag_dir.glob(pattern):
+            try:
+                indices.add(int(crop_path.stem.split("_")[-1]))
+            except ValueError:
+                continue
+    return sorted(indices)
+
+
+def _load_reference_crop_and_mask(tag_dir: Path, crop_index: int) -> tuple[np.ndarray, np.ndarray] | None:
+    # Prefer transparent PNG references if available.
+    rgba_path = tag_dir / "crops_rgba" / f"crop_{crop_index}.png"
+    rgba = cv2.imread(str(rgba_path), cv2.IMREAD_UNCHANGED)
+    if rgba is not None:
+        if rgba.ndim == 2:
+            image_bgr = cv2.cvtColor(rgba, cv2.COLOR_GRAY2BGR)
+            mask = np.where(rgba > 127, 255, 0).astype(np.uint8)
+            return image_bgr, mask
+
+        if rgba.ndim == 3 and rgba.shape[2] == 4:
+            image_bgr = rgba[:, :, :3]
+            alpha = rgba[:, :, 3]
+            mask = np.where(alpha > 0, 255, 0).astype(np.uint8)
+            return image_bgr, mask
+
+        if rgba.ndim == 3 and rgba.shape[2] == 3:
+            image_bgr = rgba
+            mask = load_crop_aligned_mask(tag_dir, crop_index, image_bgr.shape[:2])
+            return image_bgr, mask
+
+    for suffix in (".png", ".jpg", ".jpeg"):
+        crop_path = tag_dir / "crops" / f"crop_{crop_index}{suffix}"
+        image_bgr = cv2.imread(str(crop_path), cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            continue
+        mask = load_crop_aligned_mask(tag_dir, crop_index, image_bgr.shape[:2])
+        return image_bgr, mask
+
+    return None
+
+
 def load_reference_card_assets(paths: Paths) -> list[CardAsset]:
     """Load every labeled reference crop and its aligned mask."""
     labels = read_reference_labels(paths.reference_csv)
     assets: list[CardAsset] = []
 
     for tag_dir in sorted([path for path in paths.ref_cards_dir.iterdir() if path.is_dir()]):
-        crops_dir = tag_dir / "crops"
-        if not crops_dir.exists():
+        crop_indices = _collect_reference_crop_indices(tag_dir)
+        if not crop_indices:
             continue
 
-        for crop_path in sorted(crops_dir.glob("crop_*.jpg"), key=natural_sort_key):
-            crop_index = int(crop_path.stem.split("_")[-1])
+        for crop_index in crop_indices:
             image_id = f"{tag_dir.name}_crop_{crop_index}"
             label = labels.get(image_id)
             if label is None:
                 continue
 
-            image_bgr = cv2.imread(str(crop_path), cv2.IMREAD_COLOR)
-            if image_bgr is None:
+            loaded = _load_reference_crop_and_mask(tag_dir, crop_index)
+            if loaded is None:
                 continue
+            image_bgr, mask = loaded
 
-            mask = load_crop_aligned_mask(tag_dir, crop_index, image_bgr.shape[:2])
             assets.append(CardAsset(image_id=image_id, label=label, image_bgr=image_bgr, mask=mask))
 
     if not assets:

@@ -86,7 +86,7 @@ def load_augmented_card_samples(
     aug_cards_dir: Path,
     aug_masks_dir: Path | None = None,
     project_root: Path | None = None,
-    valid_ext: tuple[str, ...] = (".jpg", ".jpeg", ".png"),
+    valid_ext: tuple[str, ...] = (".png", ".jpg", ".jpeg"),
 ) -> tuple[list[CardSample], list[str], int, int, int]:
     samples: list[CardSample] = []
     missing: list[str] = []
@@ -112,7 +112,7 @@ def load_augmented_card_samples(
 
             if image_path is None:
                 skipped_files += 1
-                missing.append(str(aug_cards_dir / f"{image_id}.jpg"))
+                missing.append(str(aug_cards_dir / f"{image_id}.png"))
                 continue
 
             mask_path: Path | None = None
@@ -153,6 +153,7 @@ def load_scene_manual_samples(
     skipped_masks = 0
 
     valid_mask_ext = {".png", ".jpg", ".jpeg"}
+    valid_img_ext = (".png", ".jpg", ".jpeg")
     scene_mask_by_stem = {
         mask_path.stem: mask_path
         for mask_path in sorted(scene_masks_dir.iterdir())
@@ -164,7 +165,12 @@ def load_scene_manual_samples(
 
     for entry in scene_metadata:
         scene_name = str(entry.get("scene", "")).strip()
-        default_path = scene_images_dir / f"{scene_name}.jpg"
+        default_path = scene_images_dir / f"{scene_name}.png"
+        for suffix in valid_img_ext:
+            candidate = scene_images_dir / f"{scene_name}{suffix}"
+            if candidate.is_file():
+                default_path = candidate
+                break
         raw_path = entry.get("image_path", default_path)
         path = Path(raw_path) if isinstance(raw_path, str) else default_path
         scene_path = path if path.is_absolute() else project_root / path

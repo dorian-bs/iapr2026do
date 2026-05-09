@@ -76,9 +76,10 @@ def initialize_create_augmented_data_pipeline(cfg: CreateAugmentedDataConfig) ->
 def _clear_augmented_card_outputs(paths: Paths) -> None:
     """Remove only files produced by this augmented-card generator."""
     paths.aug_cards_dir.mkdir(parents=True, exist_ok=True)
-    for output_file in paths.aug_cards_dir.glob("aug_*.jpg"):
-        if output_file.is_file():
-            output_file.unlink()
+    for pattern in ("aug_*.png", "aug_*.jpg", "aug_*.jpeg"):
+        for output_file in paths.aug_cards_dir.glob(pattern):
+            if output_file.is_file():
+                output_file.unlink()
 
     paths.aug_masks_dir.mkdir(parents=True, exist_ok=True)
     for output_file in paths.aug_masks_dir.glob("aug_*.png"):
@@ -121,9 +122,9 @@ def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
         asset = card_assets[aug_index % len(card_assets)]
         aug_img, aug_mask = render_augmented_card(asset, rng_cards, cfg, paths, caches)
         image_id = f"aug_{aug_index:05d}"
-        image_path = paths.aug_cards_dir / f"{image_id}.jpg"
+        image_path = paths.aug_cards_dir / f"{image_id}.png"
         mask_path = paths.aug_masks_dir / f"{image_id}.png"
-        cv2.imwrite(str(image_path), aug_img, [int(cv2.IMWRITE_JPEG_QUALITY), 96])
+        cv2.imwrite(str(image_path), aug_img)
         cv2.imwrite(str(mask_path), aug_mask)
         aug_rows.append(
             {
@@ -183,7 +184,7 @@ def run_scene_generation(state: dict[str, Any]) -> dict[str, Any]:
             card_assets, rng_dataset, cfg, paths, caches
         )
         scene_name = f"aug_scene_{scene_index:05d}"
-        image_path = paths.scenes_img_dir / f"{scene_name}.jpg"
+        image_path = paths.scenes_img_dir / f"{scene_name}.png"
         mask_path = paths.scenes_mask_dir / f"{scene_name}.png"
 
         cv2.imwrite(str(image_path), scene_bgr)

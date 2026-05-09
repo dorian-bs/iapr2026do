@@ -32,7 +32,9 @@ def plot_card_preview(state: dict[str, Any]) -> None:
 
     for ax, index in zip(axes, preview_indices):
         row = aug_rows[int(index)]
-        image_path = paths.aug_cards_dir / f"{row['image_id']}.jpg"
+        image_path = paths.aug_cards_dir / f"{row['image_id']}.png"
+        if not image_path.is_file():
+            image_path = paths.aug_cards_dir / f"{row['image_id']}.jpg"
         image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
         ax.imshow(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
         ax.set_title(row["card"], fontsize=9)

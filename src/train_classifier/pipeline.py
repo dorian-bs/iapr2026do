@@ -275,8 +275,14 @@ def _load_augmented_card_samples(
             label = _clean_label(row["card"])
             if not image_id or not label or label == "token":
                 continue
-            image_path = aug_cards_dir / f"{image_id}.jpg"
-            if image_path.is_file():
+            image_path: Path | None = None
+            for suffix in (".png", ".jpg", ".jpeg"):
+                candidate = aug_cards_dir / f"{image_id}{suffix}"
+                if candidate.is_file():
+                    image_path = candidate
+                    break
+
+            if image_path is not None:
                 mask_path: Path | None = None
 
                 mask_path_raw = str(row.get("mask_path", "")).strip()
@@ -298,7 +304,7 @@ def _load_augmented_card_samples(
 
                 samples.append(CardSample("augmented_card", label, image_path, mask_path=mask_path))
             else:
-                missing.append(str(image_path))
+                missing.append(str(aug_cards_dir / f"{image_id}.png"))
     return samples, missing, missing_masks
 
 
@@ -319,6 +325,7 @@ def _load_scene_samples(
         return samples, missing, skipped_labels, skipped_boxes, skipped_masks
 
     valid_mask_ext = {".png", ".jpg", ".jpeg"}
+    valid_img_ext = (".png", ".jpg", ".jpeg")
     scene_mask_by_stem = {
         mask_path.stem: mask_path
         for mask_path in sorted(scene_masks_dir.iterdir())
@@ -329,15 +336,22 @@ def _load_scene_samples(
         scene_metadata = json.load(labels_file)
 
     for scene_entry in scene_metadata:
+        scene_name = str(scene_entry.get("scene", "")).strip()
+        default_scene_path = scene_images_dir / f"{scene_name}.png"
+        for suffix in valid_img_ext:
+            candidate = scene_images_dir / f"{scene_name}{suffix}"
+            if candidate.is_file():
+                default_scene_path = candidate
+                break
+
         scene_path = _resolve_project_path(
-            scene_entry.get("image_path", scene_images_dir / f"{scene_entry['scene']}.jpg"),
+            scene_entry.get("image_path", default_scene_path),
             project_root,
         )
         if not scene_path.is_file():
             missing.append(str(scene_path))
             continue
 
-        scene_name = str(scene_entry.get("scene", "")).strip()
         scene_mask_path = scene_mask_by_stem.get(scene_path.stem) or scene_mask_by_stem.get(scene_name)
 
         for card in scene_entry.get("cards", []):
