@@ -25,7 +25,7 @@ from matplotlib.patches import Rectangle
 from skimage.feature import hog as skimage_hog
 
 from src.shared.card_models import SceneUNetSmall, assert_param_cap
-from src.shared.card_pipeline import (
+from src.shared.card_pipeline_old import (
     assign_region,
     boxes_from_probability,
     box_iou,
@@ -536,6 +536,32 @@ def _bag_f1(pred_cards: list[str], true_cards: list[str]) -> float:
     return 1.0 if denom == 0 else (2 * tp) / denom
 
 
+def _segmenter_card_count_metrics(
+    pred_rows: list[dict[str, Any]],
+    true_summary: dict[str, str],
+) -> tuple[int, int, int, float, float]:
+    true_counts = {
+        "center": 0 if str(true_summary["center_card"]).strip().upper() == "EMPTY" else 1,
+        "p1": len(_parse_cards_field(true_summary["player_1_cards"])),
+        "p2": len(_parse_cards_field(true_summary["player_2_cards"])),
+        "p3": len(_parse_cards_field(true_summary["player_3_cards"])),
+        "p4": len(_parse_cards_field(true_summary["player_4_cards"])),
+    }
+    pred_counts = {"center": 0, "p1": 0, "p2": 0, "p3": 0, "p4": 0}
+    for row in pred_rows:
+        region = str(row.get("region", "")).strip()
+        if region in pred_counts:
+            pred_counts[region] += 1
+
+    true_total = int(sum(true_counts.values()))
+    # Region-wise deficits prevent over-detections in one region from hiding misses in another.
+    not_found_total = int(sum(max(0, true_counts[k] - pred_counts[k]) for k in true_counts))
+    found_total = true_total - not_found_total
+    not_found_rate = float(not_found_total / true_total) if true_total > 0 else 0.0
+    found_recall = float(found_total / true_total) if true_total > 0 else 1.0
+    return true_total, found_total, not_found_total, not_found_rate, found_recall
+
+
 def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any] | None = None) -> dict[str, Any]:
     bcfg = benchmark_config or {}
     eval_max_images = bcfg.get("eval_max_images", None)
@@ -594,6 +620,10 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
         ]
         center_acc = float(pred_summary["center_card"] == true_summary["center_card"])
         image_score = float(np.mean([center_acc] + f1s))
+        true_total_cards, found_cards, not_found_cards, not_found_rate, segmenter_recall = (
+            _segmenter_card_count_metrics(pred_rows, true_summary)
+        )
+        image_score_strict = float(np.mean([center_acc] + f1s + [segmenter_recall]))
 
         results.append({
             "image_id": image_id_local,
@@ -604,6 +634,12 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
             "center_acc": center_acc,
             "p1_f1": f1s[0], "p2_f1": f1s[1], "p3_f1": f1s[2], "p4_f1": f1s[3],
             "image_score": image_score,
+            "image_score_strict": image_score_strict,
+            "true_card_count": true_total_cards,
+            "found_card_count": found_cards,
+            "not_found_count": not_found_cards,
+            "not_found_rate": not_found_rate,
+            "segmenter_card_recall": segmenter_recall,
         })
 
         if row_index % 25 == 0 or row_index == len(gt_rows):
@@ -616,16 +652,28 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
     p_means = [float(np.mean([r[f"p{i}_f1"] for r in results])) for i in (1, 2, 3, 4)]
     macro_f1 = float(np.mean(p_means))
     overall = float(np.mean([r["image_score"] for r in results]))
+    overall_strict = float(np.mean([r["image_score_strict"] for r in results]))
+    total_true_cards = int(sum(r["true_card_count"] for r in results))
+    total_found_cards = int(sum(r["found_card_count"] for r in results))
+    total_not_found_cards = int(sum(r["not_found_count"] for r in results))
+    cards_not_found_rate = float(total_not_found_cards / total_true_cards) if total_true_cards > 0 else 0.0
+    segmenter_card_recall = float(total_found_cards / total_true_cards) if total_true_cards > 0 else 1.0
 
     print("\nBenchmark summary (original labeled data):")
     print(f"  Center-card accuracy: {center_acc * 100:.2f}%")
     print(f"  Player card F1: p1={p_means[0]:.3f}, p2={p_means[1]:.3f}, p3={p_means[2]:.3f}, p4={p_means[3]:.3f}")
     print(f"  Macro player-card F1: {macro_f1:.3f}")
     print(f"  Overall image score:  {overall:.3f}")
+    print(f"  Overall strict score: {overall_strict:.3f} (includes segmenter card-recall penalty)")
+    print(f"  Segmenter card recall: {segmenter_card_recall:.3f} ({total_found_cards}/{total_true_cards})")
+    print(f"  Cards not found: {total_not_found_cards}/{total_true_cards} ({cards_not_found_rate * 100:.2f}%)")
     print("  Note: active_player is not scored yet because this notebook does not predict turns.")
 
-    metric_names = ["center_acc", "p1_f1", "p2_f1", "p3_f1", "p4_f1", "macro_f1", "overall"]
-    metric_values = [center_acc] + p_means + [macro_f1, overall]
+    metric_names = [
+        "center_acc", "p1_f1", "p2_f1", "p3_f1", "p4_f1", "macro_f1",
+        "seg_recall", "overall", "overall_strict",
+    ]
+    metric_values = [center_acc] + p_means + [macro_f1, segmenter_card_recall, overall, overall_strict]
     image_scores = [r["image_score"] for r in results]
     bin_count = min(24, max(8, int(np.sqrt(len(image_scores)))))
 
@@ -668,6 +716,12 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
         "p1_f1": p_means[0], "p2_f1": p_means[1], "p3_f1": p_means[2], "p4_f1": p_means[3],
         "macro_f1": macro_f1,
         "overall": overall,
+        "overall_strict": overall_strict,
+        "cards_total": total_true_cards,
+        "cards_found_total": total_found_cards,
+        "cards_not_found_total": total_not_found_cards,
+        "cards_not_found_rate": cards_not_found_rate,
+        "segmenter_card_recall": segmenter_card_recall,
         "worst_results": worst_results,
         "top_results": top_results,
     }
