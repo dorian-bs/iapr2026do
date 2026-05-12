@@ -101,6 +101,7 @@ class TrainPipelineConfig:
 
     scene_finetune_freeze_bn_stats: bool = True
     grad_clip_norm: float = 1.0
+    predicted_cache_binary_masks: bool = True
 
     preview_per_stage: int = 3
 
@@ -258,9 +259,16 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     scene_paths_for_pred = sorted({
         s.image_path.resolve() for s in scene_predicted_train_samples + scene_predicted_val_samples
     })
+    cache_threshold = cfg.mask_threshold if cfg.predicted_cache_binary_masks else None
     predicted_scene_probs = build_scene_probability_cache(
-        scene_paths_for_pred, scene_segmenter_path, device, target_size=cfg.segmenter_img_size,
+        scene_paths_for_pred,
+        scene_segmenter_path,
+        device,
+        target_size=cfg.segmenter_img_size,
+        mask_threshold=cache_threshold,
     )
+    predicted_cache_bytes = int(sum(arr.nbytes for arr in predicted_scene_probs.values()))
+    predicted_cache_mode = "uint8_binary_masks" if cfg.predicted_cache_binary_masks else "float32_probabilities"
 
     # ---------------- per-stage sample budgets ----------------
     ref_per_epoch = _stage_samples_per_epoch(len(reference_samples), "reference", batch_size, device, cfg)
@@ -337,6 +345,10 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     print(f"Augmented-card samples:      {len(augmented_card_samples)} (per_epoch={aug_per_epoch})")
     print(f"Scene-manual train/val:      {len(scene_train_samples)}/{len(scene_val_samples)} (per_epoch={scene_manual_per_epoch})")
     print(f"Scene-predicted train:       {len(scene_predicted_train_samples)} (per_epoch={scene_pred_per_epoch})")
+    print(
+        "Predicted scene cache:       "
+        f"{predicted_cache_mode} ({predicted_cache_bytes / (1024 ** 2):.1f} MiB)"
+    )
     if cfg.epoch_max_train_samples is not None:
         print(f"Global epoch_max_train_samples cap: {cfg.epoch_max_train_samples}")
     print(f"Num classes:                 {len(label_encoder.classes_)}")
@@ -369,6 +381,8 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         "scene_predicted_train_samples": scene_predicted_train_samples,
         "scene_predicted_val_samples": scene_predicted_val_samples,
         "predicted_scene_probs": predicted_scene_probs,
+        "predicted_cache_mode": predicted_cache_mode,
+        "predicted_cache_bytes": predicted_cache_bytes,
         "label_encoder": label_encoder,
         "label_to_index": label_to_index,
         "reference_samples_per_epoch": ref_per_epoch,

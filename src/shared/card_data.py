@@ -274,7 +274,14 @@ def sample_to_crop_and_mask(
         if prob_map is None:
             raise KeyError(f"Missing predicted probability map: {sample.image_path}")
         prob_crop = crop_with_margin(prob_map, sample.bbox, margin_fraction=bbox_margin)
-        mask_crop = np.where(prob_crop > mask_threshold, 255, 0).astype(np.uint8)
+        # Cache may contain float probabilities (legacy) or pre-thresholded uint8 masks.
+        if prob_crop.dtype == np.bool_:
+            mask_crop = prob_crop.astype(np.uint8) * 255
+        elif np.issubdtype(prob_crop.dtype, np.floating):
+            mask_crop = np.where(prob_crop > mask_threshold, 255, 0).astype(np.uint8)
+        else:
+            int_threshold = int(round(float(mask_threshold) * 255.0))
+            mask_crop = np.where(prob_crop > int_threshold, 255, 0).astype(np.uint8)
 
     else:
         raise ValueError(f"Unknown sample stage: {sample.stage}")
@@ -490,9 +497,14 @@ def build_scene_probability_cache(
     device: torch.device,
     target_size: int = 256,
     progress_every: int = 100,
+    mask_threshold: float | None = None,
 ) -> dict[str, np.ndarray]:
     """Run the frozen scene segmenter once per unique scene and cache the
-    full-resolution probability map keyed by resolved absolute path."""
+    full-resolution output keyed by resolved absolute path.
+
+    If `mask_threshold` is provided, outputs are stored as uint8 binary masks
+    (0 or 255), which significantly reduces host RAM use versus float32 maps.
+    """
     if not segmenter_path.is_file():
         raise FileNotFoundError(f"Missing scene segmenter checkpoint: {segmenter_path}")
 
@@ -508,9 +520,15 @@ def build_scene_probability_cache(
         if img_bgr is None:
             raise FileNotFoundError(f"Cannot read scene image: {scene_path}")
         prob = segment_scene_probability(img_bgr, segmenter, device, target_size=target_size)
-        cache[str(scene_path.resolve())] = prob.astype(np.float32)
+        if mask_threshold is None:
+            cache_value = prob.astype(np.float32, copy=False)
+        else:
+            cache_value = np.where(prob > float(mask_threshold), 255, 0).astype(np.uint8)
+        cache[str(scene_path.resolve())] = cache_value
         if idx % progress_every == 0 or idx == len(scene_paths):
             print(f"  {idx}/{len(scene_paths)}")
+
+    del segmenter
     return cache
 
 
