@@ -274,12 +274,28 @@ def split_touching_component(
     return [component]
 
 
+def remove_small_components(mask: np.ndarray, min_area: int) -> np.ndarray:
+    """Keep only connected components whose area is at least `min_area` pixels."""
+    min_area = int(min_area)
+    if min_area <= 1:
+        return (mask > 0).astype(np.uint8)
+
+    binary = (mask > 0).astype(np.uint8)
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    cleaned = np.zeros_like(binary, dtype=np.uint8)
+    for label_idx in range(1, n_labels):
+        if int(stats[label_idx, cv2.CC_STAT_AREA]) >= min_area:
+            cleaned[labels == label_idx] = 1
+    return cleaned
+
+
 def boxes_from_probability(
     probability: np.ndarray,
     threshold: float = 0.50,
     max_components: int = 40,
     min_aspect: float = 0.12,
     max_aspect: float = 5.0,
+    min_component_area: int | None = None,
 ) -> tuple[list[tuple[int, int, int, int]], np.ndarray]:
     h, w = probability.shape[:2]
     mask = (probability > threshold).astype(np.uint8)
@@ -287,8 +303,11 @@ def boxes_from_probability(
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
+    auto_min_area = max(400, int(0.00035 * h * w))
+    min_area = auto_min_area if min_component_area is None else max(1, int(min_component_area))
+    mask = remove_small_components(mask, min_area)
+
     n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
-    min_area = max(400, int(0.00035 * h * w))
     min_split_area = max(220, int(0.55 * min_area))
     boxes: list[tuple[int, int, int, int]] = []
 

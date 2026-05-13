@@ -8,33 +8,33 @@ from dataclasses import dataclass
 class CreateAugmentedDataConfig:
     """All tunable knobs for the augmented-card and augmented-scene generators."""
 
-    seed: int = 42
+    seed: int = 67
 
     # Single-card augmentation knobs.
-    n_aug_per_reference: int = 400
+    n_aug_per_reference: int = 500
     aug_card_canvas: tuple[int, int] = (256, 256)
     aug_card_height_range: tuple[int, int] = (140, 220)
     aug_card_angle_range_deg: tuple[float, float] = (-25.0, 25.0)
     aug_card_shift_fraction: float = 0.12
     # RGB card output: JPEG is usually a better speed/size tradeoff for training.
     aug_card_image_format: str = "jpg"  # png | jpg | jpeg
-    aug_card_jpeg_quality: int = 92
+    aug_card_jpeg_quality: int = 85
 
     # Scene generation knobs.
-    n_scenes: int = 4000
+    n_scenes: int = 8192
     scene_width: int = 1280
     scene_height: int = 720
     min_cards_per_player: int = 0
-    max_cards_per_player: int = 4
+    max_cards_per_player: int = 6   
     # Wider erosion gap makes individual cards more separated in target masks.
-    mask_gap_pixels: int = 6
+    mask_gap_pixels: int = 3
     min_visible_card_area: int = 90
     clear_output_dirs: bool = True
 
     player_card_height_fraction_range: tuple[float, float] = (0.2, 0.22)
     center_card_height_fraction_range: tuple[float, float] = (0.2, 0.22)
     # Wide spacing range allows either stronger overlap or clearly separated cards.
-    player_slot_spacing_factor_range: tuple[float, float] = (0.12, 1.5)
+    player_slot_spacing_factor_range: tuple[float, float] = (0.09, 1.5)
     player_hand_center_jitter_fraction_range: tuple[float, float] = (0.006, 0.02)
     player_slot_offset_jitter_fraction_range: tuple[float, float] = (0.05, 0.20)
     player_inward_jitter_fraction_range: tuple[float, float] = (0.008, 0.03)
@@ -44,7 +44,7 @@ class CreateAugmentedDataConfig:
     center_angle_range_deg: tuple[float, float] = (-70.0, 70.0)
     # RGB scene output: JPEG reduces storage and typically speeds up loading.
     scene_image_format: str = "jpg"  # png | jpg | jpeg
-    scene_jpeg_quality: int = 90
+    scene_jpeg_quality: int = 80
 
     # Token placement hyperparameters.
     token_inward_distance_fraction_range: tuple[float, float] = (0.0, 0.05)

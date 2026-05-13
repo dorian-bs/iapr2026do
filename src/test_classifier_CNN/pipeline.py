@@ -49,6 +49,7 @@ class TestPipelineConfig:
     card_img_size: int = 160
     segmenter_img_size: int = 256
     card_mask_threshold: float = 0.50
+    segmenter_min_component_area: int | None = None
 
     eval_threshold: float = 0.50
 
@@ -169,7 +170,10 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
 
     print(f"Loaded masked classifier with {len(card_classes)} classes.")
     print(f"Classifier architecture: {classifier_arch} (stem_width={classifier_stem_width})")
-    print(f"Card image size: {card_img_size} | mask threshold: {card_mask_threshold} | input channels: {input_channels}")
+    print(
+        f"Card image size: {card_img_size} | mask threshold: {card_mask_threshold} | "
+        f"segmenter min component area: {cfg.segmenter_min_component_area} | input channels: {input_channels}"
+    )
     print(f"Device: {device}")
 
     # ---------------- pick the image to diagnose ----------------
@@ -220,6 +224,9 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
         "device": device,
         "card_img_size": card_img_size,
         "segmenter_img_size": int(cfg.segmenter_img_size),
+        "segmenter_min_component_area": (
+            None if cfg.segmenter_min_component_area is None else int(cfg.segmenter_min_component_area)
+        ),
         "card_mask_threshold": card_mask_threshold,
         "card_norm_mean": card_norm_mean,
         "card_norm_std": card_norm_std,
@@ -246,7 +253,11 @@ def _predict_game_state(
     probability = segment_scene_probability(
         image_bgr, state["segmenter"], state["device"], target_size=state["segmenter_img_size"],
     )
-    boxes, mask = boxes_from_probability(probability, threshold=threshold)
+    boxes, mask = boxes_from_probability(
+        probability,
+        threshold=threshold,
+        min_component_area=state.get("segmenter_min_component_area"),
+    )
 
     pred_rows: list[dict[str, Any]] = []
     for box_index, box in enumerate(boxes):
@@ -634,7 +645,11 @@ def _plot_qualitative(examples: list[dict[str, Any]], title: str, state: dict[st
         probability = segment_scene_probability(
             image_bgr, state["segmenter"], state["device"], target_size=state["segmenter_img_size"],
         )
-        _, mask = boxes_from_probability(probability, threshold=threshold)
+        _, mask = boxes_from_probability(
+            probability,
+            threshold=threshold,
+            min_component_area=state.get("segmenter_min_component_area"),
+        )
 
         ax_img = axes[row_idx, 0]
         ax_img.imshow(image_rgb)
