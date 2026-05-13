@@ -26,7 +26,7 @@ def transform_card(
     angle_degrees: float,
     rng: np.random.Generator,
     apply_rotation: bool = True,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Resize one card crop+mask, then apply photometric jitter and optional rotation."""
     source_height, source_width = asset.image_bgr.shape[:2]
     scale = float(target_height) / max(1, source_height)
@@ -35,6 +35,11 @@ def transform_card(
 
     resized_image = cv2.resize(asset.image_bgr, (resized_width, resized_height), interpolation=cv2.INTER_AREA)
     resized_mask = cv2.resize(asset.mask, (resized_width, resized_height), interpolation=cv2.INTER_NEAREST)
+    resized_alpha = cv2.resize(
+        asset.mask.astype(np.float32) / 255.0,
+        (resized_width, resized_height),
+        interpolation=cv2.INTER_LINEAR,
+    )
 
     alpha = float(rng.uniform(0.88, 1.14))
     beta = float(rng.uniform(-16, 16))
@@ -45,7 +50,9 @@ def transform_card(
         resized_image = np.clip(resized_image.astype(np.float32) + noise, 0, 255).astype(np.uint8)
 
     if not apply_rotation or abs(float(angle_degrees)) < 1e-6:
-        return resized_image, (resized_mask > 127).astype(np.uint8) * 255
+        binary_mask = (resized_mask > 127).astype(np.uint8) * 255
+        soft_alpha = np.clip(resized_alpha, 0.0, 1.0)
+        return resized_image, binary_mask, soft_alpha
 
     center = (resized_width / 2.0, resized_height / 2.0)
     rotation_matrix = cv2.getRotationMatrix2D(center, float(angle_degrees), 1.0)
@@ -73,8 +80,17 @@ def transform_card(
         borderMode=cv2.BORDER_CONSTANT,
         borderValue=0,
     )
+    rotated_alpha = cv2.warpAffine(
+        resized_alpha,
+        rotation_matrix,
+        (rotated_width, rotated_height),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0.0,
+    )
 
-    return rotated_image, (rotated_mask > 127).astype(np.uint8) * 255
+    soft_alpha = np.clip(rotated_alpha, 0.0, 1.0)
+    return rotated_image, (rotated_mask > 127).astype(np.uint8) * 255, soft_alpha
 
 
 def paste_patch(
@@ -83,10 +99,11 @@ def paste_patch(
     patch_bgr: np.ndarray,
     patch_mask: np.ndarray,
     center_xy: tuple[float, float],
+    patch_alpha: np.ndarray | None = None,
     instance_id: int | None = None,
     erase_instances: bool = False,
 ) -> tuple[int, int, int, int] | None:
-    """Paste a masked patch and optionally write or erase instance ids."""
+    """Paste a masked patch with optional soft alpha and instance-id updates."""
     scene_height, scene_width = scene_bgr.shape[:2]
     patch_height, patch_width = patch_bgr.shape[:2]
     center_x, center_y = center_xy
@@ -108,15 +125,26 @@ def paste_patch(
     src_right = src_left + (dst_right - dst_left)
     src_bottom = src_top + (dst_bottom - dst_top)
 
-    mask_patch = patch_mask[src_top:src_bottom, src_left:src_right] > 127
-    if not np.any(mask_patch):
+    mask_patch_raw = patch_mask[src_top:src_bottom, src_left:src_right]
+    mask_patch = mask_patch_raw > 127
+    if patch_alpha is None:
+        alpha_patch = mask_patch_raw.astype(np.float32) / 255.0
+    else:
+        alpha_patch = patch_alpha[src_top:src_bottom, src_left:src_right].astype(np.float32)
+        if float(alpha_patch.max(initial=0.0)) > 1.0:
+            alpha_patch = alpha_patch / 255.0
+    alpha_patch = np.clip(alpha_patch, 0.0, 1.0)
+
+    if not np.any(mask_patch) and not np.any(alpha_patch > 0.0):
         return None
 
     image_patch = patch_bgr[src_top:src_bottom, src_left:src_right]
     scene_roi = scene_bgr[dst_top:dst_bottom, dst_left:dst_right]
     instance_roi = instance_map[dst_top:dst_bottom, dst_left:dst_right]
 
-    scene_roi[mask_patch] = image_patch[mask_patch]
+    alpha_3c = alpha_patch[:, :, None]
+    blended = scene_roi.astype(np.float32) * (1.0 - alpha_3c) + image_patch.astype(np.float32) * alpha_3c
+    scene_roi[:] = np.clip(blended, 0, 255).astype(np.uint8)
     if instance_id is not None:
         instance_roi[mask_patch] = instance_id
     if erase_instances:
@@ -128,6 +156,19 @@ def paste_patch(
     bbox_right = int(dst_left + visible_x.max() + 1)
     bbox_bottom = int(dst_top + visible_y.max() + 1)
     return bbox_left, bbox_top, bbox_right, bbox_bottom
+
+
+def shadow_alpha_from_card_alpha(
+    card_alpha: np.ndarray,
+    blur_sigma_pixels: float,
+    shadow_opacity: float,
+) -> np.ndarray:
+    """Build a soft shadow alpha map from a card alpha map."""
+    shadow_alpha = np.clip(card_alpha.astype(np.float32), 0.0, 1.0)
+    sigma = max(0.1, float(blur_sigma_pixels))
+    shadow_alpha = cv2.GaussianBlur(shadow_alpha, ksize=(0, 0), sigmaX=sigma, sigmaY=sigma)
+    shadow_alpha *= float(np.clip(shadow_opacity, 0.0, 1.0))
+    return np.clip(shadow_alpha, 0.0, 1.0)
 
 
 def separated_binary_mask(
@@ -317,6 +358,24 @@ def compose_augmented_scene(
     scene_bgr = make_background(style_key, scene_height, scene_width, rng, paths, caches)
     instance_map = np.zeros((scene_height, scene_width), dtype=np.uint16)
 
+    shadow_direction_degrees = None
+    shadow_dx = 0.0
+    shadow_dy = 0.0
+    shadow_blur_pixels = 0.0
+    shadow_opacity = 0.0
+    if cfg.scene_shadow_enabled:
+        direction_radians = float(rng.uniform(0.0, 2.0 * np.pi))
+        shadow_direction_degrees = float((np.degrees(direction_radians) + 360.0) % 360.0)
+        offset_pixels = float(
+            rng.uniform(*cfg.scene_shadow_offset_fraction_range) * min(scene_height, scene_width)
+        )
+        shadow_dx = float(np.cos(direction_radians) * offset_pixels)
+        shadow_dy = float(np.sin(direction_radians) * offset_pixels)
+        shadow_blur_pixels = float(
+            rng.uniform(*cfg.scene_shadow_blur_fraction_range) * min(scene_height, scene_width)
+        )
+        shadow_opacity = float(rng.uniform(*cfg.scene_shadow_opacity_range))
+
     player_counts = {
         player_name: int(rng.integers(cfg.min_cards_per_player, cfg.max_cards_per_player + 1))
         for player_name in PLAYERS
@@ -334,18 +393,36 @@ def compose_augmented_scene(
     for placement in placements:
         asset = placement["asset"]
         assert isinstance(asset, CardAsset)
-        patch_bgr, patch_mask = transform_card(
+        patch_bgr, patch_mask, patch_alpha = transform_card(
             asset,
             target_height=float(placement["target_height"]),
             angle_degrees=float(placement["angle_degrees"]),
             rng=rng,
         )
+
+        if cfg.scene_shadow_enabled:
+            shadow_alpha = shadow_alpha_from_card_alpha(patch_alpha, shadow_blur_pixels, shadow_opacity)
+            shadow_center = (
+                float(placement["center"][0]) + shadow_dx,
+                float(placement["center"][1]) + shadow_dy,
+            )
+            # Shadow darkens existing content without writing to instance ids.
+            paste_patch(
+                scene_bgr,
+                instance_map,
+                patch_bgr=np.zeros_like(patch_bgr, dtype=np.uint8),
+                patch_mask=patch_mask,
+                patch_alpha=shadow_alpha,
+                center_xy=shadow_center,
+            )
+
         bbox = paste_patch(
             scene_bgr,
             instance_map,
             patch_bgr,
             patch_mask,
             center_xy=placement["center"],
+            patch_alpha=patch_alpha,
             instance_id=next_instance_id,
         )
         if bbox is None:
@@ -381,6 +458,10 @@ def compose_augmented_scene(
         "active_player": active_player,
         "player_card_counts": player_counts,
         "center_card_count": 1,
+        "shadow_direction_degrees": shadow_direction_degrees,
+        "shadow_offset_pixels": [float(shadow_dx), float(shadow_dy)],
+        "shadow_blur_sigma_pixels": float(shadow_blur_pixels),
+        "shadow_opacity": float(shadow_opacity),
         "token_bbox": list(map(int, token_bbox)) if token_bbox is not None else None,
         "token_source": str(token.source_path) if token.source_path is not None else "placeholder",
         "mask_gap_pixels": cfg.mask_gap_pixels,
@@ -405,7 +486,7 @@ def render_augmented_card(
     fit_scale = min(max_h / max(1, source_h), max_w / max(1, source_w), 1.0)
     target_height = float(max(1, int(round(source_h * fit_scale))))
 
-    patch_bgr, patch_mask = transform_card(
+    patch_bgr, patch_mask, patch_alpha = transform_card(
         asset,
         target_height=target_height,
         angle_degrees=0.0,
@@ -432,6 +513,7 @@ def render_augmented_card(
         instance_map=instance_map,
         patch_bgr=patch_bgr,
         patch_mask=patch_mask,
+        patch_alpha=patch_alpha,
         center_xy=center_xy,
         instance_id=1,
     )

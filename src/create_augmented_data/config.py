@@ -46,6 +46,13 @@ class CreateAugmentedDataConfig:
     scene_image_format: str = "jpg"  # png | jpg | jpeg
     scene_jpeg_quality: int = 80
 
+    # Card-shadow knobs for scene generation. Direction is sampled once per
+    # scene and reused for all cards in that scene.
+    scene_shadow_enabled: bool = True
+    scene_shadow_offset_fraction_range: tuple[float, float] = (0.006, 0.020)
+    scene_shadow_blur_fraction_range: tuple[float, float] = (0.003, 0.010)
+    scene_shadow_opacity_range: tuple[float, float] = (0.14, 0.30)
+
     # Token placement hyperparameters.
     token_inward_distance_fraction_range: tuple[float, float] = (0.0, 0.05)
     # Scale both bounds down to keep side offsets closer to players.
