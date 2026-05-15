@@ -28,7 +28,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    balanced_accuracy_score,
+    classification_report,
+    precision_recall_fscore_support,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import DataLoader
@@ -91,6 +96,7 @@ class TrainPipelineConfig:
     batch_size_mps: int = 16
     batch_size_cpu: int = 8
     num_workers: int = 4
+    persistent_workers: bool = True
 
     reference_target_gpu_mps: int = 1536
     reference_target_cpu: int = 512
@@ -103,11 +109,25 @@ class TrainPipelineConfig:
     grad_clip_norm: float = 1.0
     predicted_cache_binary_masks: bool = True
 
+    # Optional memory/runtime caps.
+    # Limits are applied on unique scene images (not card instances).
+    max_loaded_scene_images: int | None = None
+    max_predicted_cache_images: int | None = None
+
     preview_per_stage: int = 3
 
     classifier_architecture: str = "resnet18_small"
     classifier_stem_width: int = 60
     classifier_dropout: float = 0.20
+
+    # Best-checkpoint selection can optimize either a single metric or a
+    # composite score that captures both raw accuracy and class-balance quality.
+    best_epoch_selection_metric: str = "composite"
+    selection_weight_val_acc: float = 0.35
+    selection_weight_macro_f1: float = 0.30
+    selection_weight_balanced_acc: float = 0.20
+    selection_weight_top3_acc: float = 0.10
+    selection_weight_val_loss: float = 0.05
 
 
 # --------------------------------------------------------------------------- #
@@ -157,6 +177,15 @@ def _stage_samples_per_epoch(
     if planned <= 0:
         planned = min(int(n_samples), int(batch_size))
     return planned
+
+
+def _deterministic_path_subset(paths: list[Path], max_count: int, seed: int) -> list[Path]:
+    if max_count <= 0:
+        raise ValueError(f"max_count must be > 0, got {max_count}")
+    if len(paths) <= max_count:
+        return list(paths)
+    rng = random.Random(int(seed))
+    return sorted(rng.sample(list(paths), k=max_count))
 
 
 def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> dict[str, Any]:
@@ -238,6 +267,37 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     # which inflates val accuracy. Instead, split the unique scene paths so every card
     # from a given scene goes entirely to one side.
     unique_scene_paths = sorted({s.image_path for s in scene_manual_samples})
+    if cfg.max_loaded_scene_images is not None:
+        capped_scene_paths = _deterministic_path_subset(
+            unique_scene_paths,
+            max_count=int(cfg.max_loaded_scene_images),
+            seed=cfg.seed + 13_101,
+        )
+        capped_scene_path_set = {p.resolve() for p in capped_scene_paths}
+        if len(capped_scene_paths) < len(unique_scene_paths):
+            before_samples = len(scene_manual_samples)
+            scene_manual_samples = [
+                s for s in scene_manual_samples if s.image_path.resolve() in capped_scene_path_set
+            ]
+            unique_scene_paths = capped_scene_paths
+            print(
+                "[cap] scene images limited to "
+                f"{len(unique_scene_paths)} unique files "
+                f"(max_loaded_scene_images={cfg.max_loaded_scene_images}); "
+                f"scene-manual samples: {before_samples} -> {len(scene_manual_samples)}"
+            )
+        else:
+            print(
+                "[cap] max_loaded_scene_images="
+                f"{cfg.max_loaded_scene_images} (no-op: dataset has fewer unique scene images)"
+            )
+
+    if len(unique_scene_paths) < 2:
+        raise RuntimeError(
+            "Need at least 2 unique scene images after caps to split train/val. "
+            "Increase max_loaded_scene_images or disable it."
+        )
+
     scene_train_paths_list, scene_val_paths_list = train_test_split(
         unique_scene_paths, test_size=cfg.val_split, random_state=cfg.seed
     )
@@ -259,6 +319,37 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     scene_paths_for_pred = sorted({
         s.image_path.resolve() for s in scene_predicted_train_samples + scene_predicted_val_samples
     })
+
+    if cfg.max_predicted_cache_images is not None:
+        capped_pred_paths = _deterministic_path_subset(
+            scene_paths_for_pred,
+            max_count=int(cfg.max_predicted_cache_images),
+            seed=cfg.seed + 17_171,
+        )
+        capped_pred_path_set = {p.resolve() for p in capped_pred_paths}
+        if len(capped_pred_paths) < len(scene_paths_for_pred):
+            before_pred_train = len(scene_predicted_train_samples)
+            before_pred_val = len(scene_predicted_val_samples)
+            scene_predicted_train_samples = [
+                s for s in scene_predicted_train_samples if s.image_path.resolve() in capped_pred_path_set
+            ]
+            scene_predicted_val_samples = [
+                s for s in scene_predicted_val_samples if s.image_path.resolve() in capped_pred_path_set
+            ]
+            scene_paths_for_pred = sorted(capped_pred_paths)
+            print(
+                "[cap] predicted-mask cache limited to "
+                f"{len(scene_paths_for_pred)} scenes "
+                f"(max_predicted_cache_images={cfg.max_predicted_cache_images}); "
+                f"scene-pred train: {before_pred_train} -> {len(scene_predicted_train_samples)}, "
+                f"scene-pred val: {before_pred_val} -> {len(scene_predicted_val_samples)}"
+            )
+        else:
+            print(
+                "[cap] max_predicted_cache_images="
+                f"{cfg.max_predicted_cache_images} (no-op: dataset has fewer predicted scenes)"
+            )
+
     cache_threshold = cfg.mask_threshold if cfg.predicted_cache_binary_masks else None
     predicted_scene_probs = build_scene_probability_cache(
         scene_paths_for_pred,
@@ -295,6 +386,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         mask_threshold=cfg.mask_threshold,
         pin_memory=pin_memory,
         num_workers=cfg.num_workers,
+        persistent_workers=cfg.persistent_workers,
         seed=cfg.seed,
     )
 
@@ -401,6 +493,8 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         "scaler": scaler,
         "history": [],
         "best_val_acc": None,
+        "best_selection_score": None,
+        "best_selection_metric": str(cfg.best_epoch_selection_metric),
         "best_stage": None,
         "best_epoch": None,
         "training_seconds": None,
@@ -432,6 +526,54 @@ def _safe_logits(logits: torch.Tensor) -> torch.Tensor:
     if not torch.isfinite(logits).all():
         return torch.nan_to_num(logits, nan=0.0, posinf=0.0, neginf=0.0)
     return logits
+
+
+def _inverse_error_score(value: float) -> float:
+    return 1.0 / (1.0 + max(0.0, float(value)))
+
+
+def _selection_score_from_metrics(metrics: dict[str, float], cfg: TrainPipelineConfig) -> float:
+    metric = str(cfg.best_epoch_selection_metric).strip().lower()
+
+    direct_metrics = {
+        "val_cls_acc": "cls_acc",
+        "cls_acc": "cls_acc",
+        "val_macro_f1": "macro_f1",
+        "macro_f1": "macro_f1",
+        "val_balanced_acc": "balanced_acc",
+        "balanced_acc": "balanced_acc",
+        "val_top3_acc": "top3_acc",
+        "top3_acc": "top3_acc",
+        "val_weighted_f1": "weighted_f1",
+        "weighted_f1": "weighted_f1",
+    }
+    if metric in direct_metrics:
+        return float(metrics[direct_metrics[metric]])
+
+    if metric in {"neg_val_loss", "inv_val_loss", "loss_inverse"}:
+        return _inverse_error_score(float(metrics["loss"]))
+
+    if metric != "composite":
+        raise ValueError(
+            "Unsupported best_epoch_selection_metric. Use one of: "
+            "composite, val_cls_acc, val_macro_f1, val_balanced_acc, "
+            "val_top3_acc, val_weighted_f1, neg_val_loss."
+        )
+
+    weighted_terms = [
+        (float(cfg.selection_weight_val_acc), float(metrics["cls_acc"])),
+        (float(cfg.selection_weight_macro_f1), float(metrics["macro_f1"])),
+        (float(cfg.selection_weight_balanced_acc), float(metrics["balanced_acc"])),
+        (float(cfg.selection_weight_top3_acc), float(metrics["top3_acc"])),
+        (float(cfg.selection_weight_val_loss), _inverse_error_score(float(metrics["loss"]))),
+    ]
+
+    total_weight = sum(max(0.0, weight) for weight, _ in weighted_terms)
+    if total_weight <= 0:
+        raise ValueError("Composite selection weights must contain at least one positive value.")
+
+    weighted_sum = sum(max(0.0, weight) * value for weight, value in weighted_terms)
+    return float(weighted_sum / total_weight)
 
 
 def _train_one_epoch(
@@ -506,6 +648,8 @@ def _evaluate_one_epoch(
     model.eval()
     running_loss = 0.0
     running_acc = 0.0
+    running_top3 = 0.0
+    running_confidence = 0.0
     seen = 0
     skipped = 0
 
@@ -524,25 +668,59 @@ def _evaluate_one_epoch(
             skipped += 1
             continue
 
-        pred = torch.argmax(logits, dim=1)
+        probs = torch.softmax(logits.float(), dim=1)
+        pred = torch.argmax(probs, dim=1)
+        top_k = min(3, int(probs.shape[1]))
+        topk_idx = torch.topk(probs, k=top_k, dim=1).indices
+
         bs = x.size(0)
         running_loss += loss.item() * bs
         running_acc += (pred == targets).float().mean().item() * bs
+        running_top3 += float((topk_idx == targets.unsqueeze(1)).any(dim=1).float().sum().item())
+        running_confidence += float(probs.max(dim=1).values.sum().item())
         seen += bs
 
-        if return_predictions:
-            if device.type == "mps":
-                torch.mps.synchronize()
-            true_idx.extend(targets_cpu.to(dtype=torch.int64).tolist())
-            pred_idx.extend(pred.detach().to("cpu", dtype=torch.int64).tolist())
+        if device.type == "mps":
+            torch.mps.synchronize()
+        true_idx.extend(targets_cpu.to(dtype=torch.int64).tolist())
+        pred_idx.extend(pred.detach().to("cpu", dtype=torch.int64).tolist())
+
+    true_idx_np = np.asarray(true_idx, dtype=np.int64)
+    pred_idx_np = np.asarray(pred_idx, dtype=np.int64)
+
+    if true_idx_np.size > 0:
+        macro_precision, macro_recall, macro_f1, _ = precision_recall_fscore_support(
+            true_idx_np, pred_idx_np, average="macro", zero_division=0,
+        )
+        weighted_precision, weighted_recall, weighted_f1, _ = precision_recall_fscore_support(
+            true_idx_np, pred_idx_np, average="weighted", zero_division=0,
+        )
+        balanced_acc = float(balanced_accuracy_score(true_idx_np, pred_idx_np))
+    else:
+        macro_precision = 0.0
+        macro_recall = 0.0
+        macro_f1 = 0.0
+        weighted_precision = 0.0
+        weighted_recall = 0.0
+        weighted_f1 = 0.0
+        balanced_acc = 0.0
 
     metrics = {
         "loss": running_loss / max(seen, 1),
         "cls_acc": running_acc / max(seen, 1),
+        "top3_acc": running_top3 / max(seen, 1),
+        "mean_confidence": running_confidence / max(seen, 1),
+        "macro_precision": float(macro_precision),
+        "macro_recall": float(macro_recall),
+        "macro_f1": float(macro_f1),
+        "weighted_precision": float(weighted_precision),
+        "weighted_recall": float(weighted_recall),
+        "weighted_f1": float(weighted_f1),
+        "balanced_acc": float(balanced_acc),
         "skipped_non_finite_batches": float(skipped),
     }
     if return_predictions:
-        return metrics, np.asarray(true_idx, dtype=np.int64), np.asarray(pred_idx, dtype=np.int64)
+        return metrics, true_idx_np, pred_idx_np
     return metrics
 
 
@@ -602,11 +780,10 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
 
     # Selection policy: best epoch within the LAST executed stage only.
     # Earlier stages train on simplified data (clean references, augmented cards,
-    # manual masks); their val accuracy is inflated relative to test-time, where
-    # only the segmenter's predicted masks are available. A higher stage-3 val acc
-    # does not imply better real-world performance, so we deliberately keep the
-    # final-stage checkpoint even if its number is lower.
+    # manual masks); their scores are often inflated relative to test-time. We
+    # therefore keep only the best epoch from the latest executed stage.
     last_stage_best_val_acc = -1.0
+    last_stage_best_selection_score = -float("inf")
     last_stage_best_state_dict: dict[str, torch.Tensor] | None = None
     last_stage_name: str | None = None
     last_stage_best_epoch: int = -1
@@ -632,7 +809,7 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
         optimizer = torch.optim.AdamW(model.parameters(), lr=stage_lr, weight_decay=cfg.weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
 
-        stage_best_val_acc = -1.0
+        stage_best_selection_score = -float("inf")
         epochs_without_improvement = 0
 
         print(
@@ -652,13 +829,36 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 "sample pool before repeating"
             )
 
+        stage_loader_reusable: DataLoader | None = None
+        if samples_per_epoch >= len(stage_samples):
+            stage_loader_reusable, _ = make_loader(
+                samples=stage_samples,
+                label_to_index=state["label_to_index"],
+                batch_size=state["batch_size"],
+                image_size=cfg.img_size,
+                bbox_margin=cfg.bbox_margin,
+                mask_threshold=cfg.mask_threshold,
+                shuffle=True,
+                augment=True,
+                pin_memory=(device.type == "cuda"),
+                num_workers=cfg.num_workers,
+                persistent_workers=cfg.persistent_workers,
+                seed=cfg.seed,
+                predicted_scene_probs=stage_predicted_probs,
+                balanced=cfg.balanced_sampling,
+                samples_per_epoch=samples_per_epoch,
+                sampler_seed=cfg.seed + stage_index * 10_000,
+            )
+
         for epoch in range(1, stage_epochs + 1):
             epoch_start = time.perf_counter()
 
             epoch_seed = cfg.seed + stage_index * 10_000 + epoch
-            epoch_samples = stage_samples
-            epoch_samples_per_epoch = samples_per_epoch
-            if samples_per_epoch < len(stage_samples):
+            if stage_loader_reusable is not None:
+                stage_loader = stage_loader_reusable
+            else:
+                epoch_samples = stage_samples
+                epoch_samples_per_epoch = samples_per_epoch
                 if coverage_indices is None or coverage_rng is None:
                     raise RuntimeError("Coverage sampler state was not initialized.")
 
@@ -678,23 +878,24 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 epoch_samples = [stage_samples[i] for i in selected_indices]
                 epoch_samples_per_epoch = None
 
-            stage_loader, _ = make_loader(
-                samples=epoch_samples,
-                label_to_index=state["label_to_index"],
-                batch_size=state["batch_size"],
-                image_size=cfg.img_size,
-                bbox_margin=cfg.bbox_margin,
-                mask_threshold=cfg.mask_threshold,
-                shuffle=True,
-                augment=True,
-                pin_memory=(device.type == "cuda"),
-                num_workers=cfg.num_workers,
-                seed=cfg.seed,
-                predicted_scene_probs=stage_predicted_probs,
-                balanced=cfg.balanced_sampling,
-                samples_per_epoch=epoch_samples_per_epoch,
-                sampler_seed=epoch_seed,
-            )
+                stage_loader, _ = make_loader(
+                    samples=epoch_samples,
+                    label_to_index=state["label_to_index"],
+                    batch_size=state["batch_size"],
+                    image_size=cfg.img_size,
+                    bbox_margin=cfg.bbox_margin,
+                    mask_threshold=cfg.mask_threshold,
+                    shuffle=True,
+                    augment=True,
+                    pin_memory=(device.type == "cuda"),
+                    num_workers=cfg.num_workers,
+                    persistent_workers=cfg.persistent_workers,
+                    seed=cfg.seed,
+                    predicted_scene_probs=stage_predicted_probs,
+                    balanced=cfg.balanced_sampling,
+                    samples_per_epoch=epoch_samples_per_epoch,
+                    sampler_seed=epoch_seed,
+                )
 
             train_metrics = _train_one_epoch(
                 model, stage_loader, optimizer, ce_loss, scaler, use_amp, device, cfg, stage_kind
@@ -705,27 +906,50 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             # earlier stages use manual-mask validation.
             val_metrics: dict[str, float]
             val_pred_metrics: dict[str, float]
+            stage_eval_metrics: dict[str, float]
             val_metric_name: str
             if stage_kind == "scene_predicted":
                 val_metrics = {
                     "loss": float("nan"),
                     "cls_acc": float("nan"),
+                    "top3_acc": float("nan"),
+                    "mean_confidence": float("nan"),
+                    "macro_precision": float("nan"),
+                    "macro_recall": float("nan"),
+                    "macro_f1": float("nan"),
+                    "weighted_precision": float("nan"),
+                    "weighted_recall": float("nan"),
+                    "weighted_f1": float("nan"),
+                    "balanced_acc": float("nan"),
                     "skipped_non_finite_batches": 0.0,
                 }
                 val_pred_metrics = _evaluate_one_epoch(model, val_loader_predicted, ce_loss, use_amp, device)
-                stage_val_acc = float(val_pred_metrics["cls_acc"])
+                stage_eval_metrics = val_pred_metrics
+                stage_val_acc = float(stage_eval_metrics["cls_acc"])
                 val_metric_name = "pred"
             else:
                 val_metrics = _evaluate_one_epoch(model, val_loader, ce_loss, use_amp, device)
                 val_pred_metrics = {
                     "loss": float("nan"),
                     "cls_acc": float("nan"),
+                    "top3_acc": float("nan"),
+                    "mean_confidence": float("nan"),
+                    "macro_precision": float("nan"),
+                    "macro_recall": float("nan"),
+                    "macro_f1": float("nan"),
+                    "weighted_precision": float("nan"),
+                    "weighted_recall": float("nan"),
+                    "weighted_f1": float("nan"),
+                    "balanced_acc": float("nan"),
                     "skipped_non_finite_batches": 0.0,
                 }
-                stage_val_acc = float(val_metrics["cls_acc"])
+                stage_eval_metrics = val_metrics
+                stage_val_acc = float(stage_eval_metrics["cls_acc"])
                 val_metric_name = "manual"
 
-            scheduler.step(stage_val_acc)
+            selection_score = _selection_score_from_metrics(stage_eval_metrics, cfg)
+
+            scheduler.step(selection_score)
             lr_now = float(optimizer.param_groups[0]["lr"])
             epoch_seconds = float(time.perf_counter() - epoch_start)
 
@@ -736,8 +960,15 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 "train_cls_acc": float(train_metrics["cls_acc"]),
                 "val_loss": float(val_metrics["loss"]),
                 "val_cls_acc": float(val_metrics["cls_acc"]),
+                "val_top3_acc": float(val_metrics["top3_acc"]),
+                "val_macro_f1": float(val_metrics["macro_f1"]),
+                "val_balanced_acc": float(val_metrics["balanced_acc"]),
                 "val_pred_loss": float(val_pred_metrics["loss"]),
                 "val_pred_cls_acc": float(val_pred_metrics["cls_acc"]),
+                "val_pred_top3_acc": float(val_pred_metrics["top3_acc"]),
+                "val_pred_macro_f1": float(val_pred_metrics["macro_f1"]),
+                "val_pred_balanced_acc": float(val_pred_metrics["balanced_acc"]),
+                "selection_score": float(selection_score),
                 "lr": lr_now,
                 "seconds": epoch_seconds,
                 "samples_per_epoch": int(samples_per_epoch),
@@ -751,21 +982,24 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             history.append(row)
 
             # Selection metric: predicted-mask val accuracy on stage 4 (test-realistic),
-            # manual-mask val accuracy elsewhere. Tracker resets per stage so only
-            # the last executed stage's best epoch is retained.
+            # manual-mask validation elsewhere. The selection score is configurable
+            # and can combine accuracy, macro-F1, balanced accuracy, top-k, and loss.
+            # Tracker resets per stage so only the last executed stage's best epoch
+            # is retained.
             if last_stage_name != stage_name:
                 last_stage_name = stage_name
+                last_stage_best_selection_score = -float("inf")
                 last_stage_best_val_acc = -1.0
-            selection_acc = stage_val_acc
-            is_stage_best = selection_acc > last_stage_best_val_acc
+            is_stage_best = selection_score > last_stage_best_selection_score
             if is_stage_best:
-                last_stage_best_val_acc = float(selection_acc)
+                last_stage_best_selection_score = float(selection_score)
+                last_stage_best_val_acc = float(stage_val_acc)
                 last_stage_best_state_dict = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 last_stage_best_epoch = epoch
 
-            stage_improved = stage_val_acc > stage_best_val_acc + 1e-6
+            stage_improved = selection_score > stage_best_selection_score + 1e-8
             if stage_improved:
-                stage_best_val_acc = float(stage_val_acc)
+                stage_best_selection_score = float(selection_score)
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
@@ -773,7 +1007,10 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             print(
                 f"  epoch {epoch:02d}/{stage_epochs} | "
                 f"train_acc={train_metrics['cls_acc']*100:5.1f}% loss={train_metrics['loss']:.3f} | "
-                f"val({val_metric_name})={stage_val_acc*100:5.1f}% | "
+                f"val({val_metric_name})={stage_val_acc*100:5.1f}% "
+                f"macro_f1={stage_eval_metrics['macro_f1']:.3f} "
+                f"bal_acc={stage_eval_metrics['balanced_acc']:.3f} | "
+                f"selection({cfg.best_epoch_selection_metric})={selection_score:.4f} | "
                 f"lr={lr_now:.2e} | {epoch_seconds:.1f}s"
                 + (" | stage-best" if is_stage_best else "")
             )
@@ -793,11 +1030,17 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
 
     state["history"] = history
     state["best_val_acc"] = float(last_stage_best_val_acc)
+    state["best_selection_score"] = float(last_stage_best_selection_score)
+    state["best_selection_metric"] = str(cfg.best_epoch_selection_metric)
     state["best_stage"] = last_stage_name
     state["best_epoch"] = int(last_stage_best_epoch)
     state["training_seconds"] = time.perf_counter() - global_start
 
     print("\nTraining complete.")
+    print(
+        f"Last-stage best selection score ({cfg.best_epoch_selection_metric}): "
+        f"{last_stage_best_selection_score:.4f}"
+    )
     print(f"Last-stage best validation accuracy: {last_stage_best_val_acc * 100:.2f}%")
     print(f"Selected checkpoint: {last_stage_name} epoch {last_stage_best_epoch}")
     print(f"Total training time: {state['training_seconds'] / 60:.2f} min")
@@ -902,7 +1145,16 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
         "balanced_sampling": cfg.balanced_sampling,
         "early_stop_patience": cfg.early_stop_patience,
         "min_epochs_per_stage": cfg.min_epochs_per_stage,
-        "best_selection_policy": "global_best_across_stages_manual_or_predicted_val",
+        "max_loaded_scene_images": cfg.max_loaded_scene_images,
+        "max_predicted_cache_images": cfg.max_predicted_cache_images,
+        "best_selection_policy": "last_stage_best_by_selection_metric",
+        "best_selection_metric": str(state.get("best_selection_metric") or cfg.best_epoch_selection_metric),
+        "best_selection_score": float(state.get("best_selection_score") or 0.0),
+        "selection_weight_val_acc": float(cfg.selection_weight_val_acc),
+        "selection_weight_macro_f1": float(cfg.selection_weight_macro_f1),
+        "selection_weight_balanced_acc": float(cfg.selection_weight_balanced_acc),
+        "selection_weight_top3_acc": float(cfg.selection_weight_top3_acc),
+        "selection_weight_val_loss": float(cfg.selection_weight_val_loss),
         "scene_finetune_freeze_bn_stats": bool(cfg.scene_finetune_freeze_bn_stats),
         "grad_clip_norm": float(cfg.grad_clip_norm),
         "stage_plan": _stage_plan_summary(state),
@@ -935,14 +1187,22 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
 def run_validation_diagnostics(state: dict[str, Any]) -> dict[str, Any]:
     model: nn.Module = state["model"]
     val_loader: DataLoader = state["val_loader"]
+    val_loader_predicted: DataLoader = state["val_loader_predicted"]
     ce_loss: nn.Module = state["ce_loss"]
     use_amp: bool = state["use_amp"]
     device: torch.device = state["device"]
     label_encoder: LabelEncoder = state["label_encoder"]
+    cfg: TrainPipelineConfig = state["config"]
 
     val_metrics, val_true_idx, val_pred_idx = _evaluate_one_epoch(
         model, val_loader, ce_loss, use_amp, device, return_predictions=True,
     )
+    val_pred_metrics, val_pred_true_idx, val_pred_pred_idx = _evaluate_one_epoch(
+        model, val_loader_predicted, ce_loss, use_amp, device, return_predictions=True,
+    )
+
+    selection_manual = _selection_score_from_metrics(val_metrics, cfg)
+    selection_predicted = _selection_score_from_metrics(val_pred_metrics, cfg)
 
     n_classes = len(label_encoder.classes_)
     valid_mask = (val_true_idx >= 0) & (val_true_idx < n_classes) & (val_pred_idx >= 0) & (val_pred_idx < n_classes)
@@ -952,22 +1212,60 @@ def run_validation_diagnostics(state: dict[str, Any]) -> dict[str, Any]:
         val_true_idx = val_true_idx[valid_mask]
         val_pred_idx = val_pred_idx[valid_mask]
 
+    valid_pred_mask = (
+        (val_pred_true_idx >= 0)
+        & (val_pred_true_idx < n_classes)
+        & (val_pred_pred_idx >= 0)
+        & (val_pred_pred_idx < n_classes)
+    )
+    invalid_pred = int(np.count_nonzero(~valid_pred_mask))
+    if invalid_pred > 0:
+        print(f"[warning] Dropping {invalid_pred} invalid predicted-mask validation rows.")
+        val_pred_true_idx = val_pred_true_idx[valid_pred_mask]
+        val_pred_pred_idx = val_pred_pred_idx[valid_pred_mask]
+
     if val_true_idx.size == 0:
         raise RuntimeError("No valid validation predictions available.")
+    if val_pred_true_idx.size == 0:
+        raise RuntimeError("No valid predicted-mask validation predictions available.")
 
     true_labels = label_encoder.inverse_transform(val_true_idx)
     pred_labels = label_encoder.inverse_transform(val_pred_idx)
+    true_labels_pred = label_encoder.inverse_transform(val_pred_true_idx)
+    pred_labels_pred = label_encoder.inverse_transform(val_pred_pred_idx)
 
-    print(f"Validation accuracy (manual masks): {val_metrics['cls_acc'] * 100:.2f}%")
+    print(
+        "Validation (manual masks) | "
+        f"acc={val_metrics['cls_acc'] * 100:.2f}% "
+        f"macro_f1={val_metrics['macro_f1']:.3f} "
+        f"balanced_acc={val_metrics['balanced_acc']:.3f} "
+        f"top3={val_metrics['top3_acc']:.3f} "
+        f"selection={selection_manual:.4f}"
+    )
     print(classification_report(true_labels, pred_labels, zero_division=0))
 
+    print(
+        "Validation (pred masks)   | "
+        f"acc={val_pred_metrics['cls_acc'] * 100:.2f}% "
+        f"macro_f1={val_pred_metrics['macro_f1']:.3f} "
+        f"balanced_acc={val_pred_metrics['balanced_acc']:.3f} "
+        f"top3={val_pred_metrics['top3_acc']:.3f} "
+        f"selection={selection_predicted:.4f}"
+    )
+    print(classification_report(true_labels_pred, pred_labels_pred, zero_division=0))
+
     fig_size = max(8, 0.30 * len(label_encoder.classes_))
-    fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+    fig, axes = plt.subplots(1, 2, figsize=(2 * fig_size, fig_size))
     ConfusionMatrixDisplay.from_predictions(
         true_labels, pred_labels, labels=label_encoder.classes_,
-        xticks_rotation=90, colorbar=False, ax=ax,
+        xticks_rotation=90, colorbar=False, ax=axes[0],
     )
-    ax.set_title(f"Masked classifier validation accuracy: {val_metrics['cls_acc'] * 100:.1f}%")
+    axes[0].set_title(f"Manual-mask val acc: {val_metrics['cls_acc'] * 100:.1f}%")
+    ConfusionMatrixDisplay.from_predictions(
+        true_labels_pred, pred_labels_pred, labels=label_encoder.classes_,
+        xticks_rotation=90, colorbar=False, ax=axes[1],
+    )
+    axes[1].set_title(f"Pred-mask val acc: {val_pred_metrics['cls_acc'] * 100:.1f}%")
     plt.tight_layout()
     plt.show()
 
@@ -977,10 +1275,18 @@ def run_validation_diagnostics(state: dict[str, Any]) -> dict[str, Any]:
         train_acc = [float(r["train_cls_acc"]) for r in history]
         val_acc = [float(r["val_cls_acc"]) for r in history]
         val_pred_acc = [float(r.get("val_pred_cls_acc", float("nan"))) for r in history]
+        val_macro_f1 = [float(r.get("val_macro_f1", float("nan"))) for r in history]
+        val_pred_macro_f1 = [float(r.get("val_pred_macro_f1", float("nan"))) for r in history]
+        val_bal_acc = [float(r.get("val_balanced_acc", float("nan"))) for r in history]
+        val_pred_bal_acc = [float(r.get("val_pred_balanced_acc", float("nan"))) for r in history]
+        val_top3 = [float(r.get("val_top3_acc", float("nan"))) for r in history]
+        val_pred_top3 = [float(r.get("val_pred_top3_acc", float("nan"))) for r in history]
+        selection_scores = [float(r.get("selection_score", float("nan"))) for r in history]
         train_loss = [float(r["train_loss"]) for r in history]
         val_loss = [float(r["val_loss"]) for r in history]
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        axes = np.asarray(axes).reshape(-1)
         axes[0].plot(epochs_x, train_acc, marker="o", label="train")
         axes[0].plot(epochs_x, val_acc, marker="o", label="val (manual)")
         axes[0].plot(epochs_x, val_pred_acc, marker="o", label="val (predicted)")
@@ -991,27 +1297,66 @@ def run_validation_diagnostics(state: dict[str, Any]) -> dict[str, Any]:
         axes[0].grid(alpha=0.3)
         axes[0].legend()
 
-        axes[1].plot(epochs_x, train_loss, marker="o", label="train")
-        axes[1].plot(epochs_x, val_loss, marker="o", label="val")
-        axes[1].set_title("Cross-entropy loss")
+        axes[1].plot(epochs_x, val_macro_f1, marker="o", label="macro F1 (manual)")
+        axes[1].plot(epochs_x, val_pred_macro_f1, marker="o", label="macro F1 (pred)")
+        axes[1].plot(epochs_x, val_bal_acc, marker="o", linestyle="--", label="balanced acc (manual)")
+        axes[1].plot(epochs_x, val_pred_bal_acc, marker="o", linestyle="--", label="balanced acc (pred)")
+        axes[1].set_ylim(0.0, 1.0)
+        axes[1].set_title("Class-Balance Metrics")
         axes[1].set_xlabel("Global epoch")
-        axes[1].set_ylabel("Loss")
+        axes[1].set_ylabel("Score")
         axes[1].grid(alpha=0.3)
         axes[1].legend()
 
+        axes[2].plot(epochs_x, train_loss, marker="o", label="train")
+        axes[2].plot(epochs_x, val_loss, marker="o", label="val")
+        axes[2].set_title("Cross-entropy loss")
+        axes[2].set_xlabel("Global epoch")
+        axes[2].set_ylabel("Loss")
+        axes[2].grid(alpha=0.3)
+        axes[2].legend()
+
+        axes[3].plot(epochs_x, val_top3, marker="o", label="top3 (manual)")
+        axes[3].plot(epochs_x, val_pred_top3, marker="o", label="top3 (pred)")
+        axes[3].plot(
+            epochs_x,
+            selection_scores,
+            marker="o",
+            linestyle="--",
+            color="k",
+            label=f"selection ({cfg.best_epoch_selection_metric})",
+        )
+        axes[3].set_ylim(0.0, 1.0)
+        axes[3].set_title("Top-k And Selection")
+        axes[3].set_xlabel("Global epoch")
+        axes[3].set_ylabel("Score")
+        axes[3].grid(alpha=0.3)
+        axes[3].legend()
+
         for idx, r in enumerate(history, start=1):
-            axes[0].annotate(str(r["stage"]).replace("stage", "S"), (idx, float(r["val_cls_acc"])),
-                             fontsize=7, alpha=0.65)
+            axes[0].annotate(
+                str(r["stage"]).replace("stage", "S"),
+                (idx, float(r["val_cls_acc"])),
+                fontsize=7,
+                alpha=0.65,
+            )
 
         plt.tight_layout()
         plt.show()
 
     state["val_metrics"] = val_metrics
+    state["val_pred_metrics"] = val_pred_metrics
     state["val_true_idx"] = val_true_idx
     state["val_pred_idx"] = val_pred_idx
+    state["val_pred_true_idx"] = val_pred_true_idx
+    state["val_pred_pred_idx"] = val_pred_pred_idx
     state["val_sample_indices"] = np.arange(val_true_idx.size, dtype=np.int64)
     state["true_labels"] = true_labels
     state["pred_labels"] = pred_labels
+    state["true_labels_pred"] = true_labels_pred
+    state["pred_labels_pred"] = pred_labels_pred
+    state["val_selection_score_manual"] = float(selection_manual)
+    state["val_selection_score_predicted"] = float(selection_predicted)
     return state
 
 

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -28,7 +29,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SubsetRandomSampler
 
 from src.shared.card_models import SceneUNetSmall, assert_param_cap
-from src.shared.card_pipeline import IMAGENET_MEAN, IMAGENET_STD, find_workspace_root
+from src.shared.card_pipeline import IMAGENET_MEAN, IMAGENET_STD, assign_region, find_workspace_root
 
 
 # --------------------------------------------------------------------------- #
@@ -65,6 +66,21 @@ class SegmenterPipelineConfig:
     checkpoint_filename: str = "scene_segmenter_unet_small.pth"
 
     preview_count: int = 6
+    eval_mask_threshold: float = 0.5
+    eval_min_component_area: int | None = None
+
+    # Checkpoint selection can optimize for overlap-only metrics or a
+    # game-state-aware composite score that includes count quality.
+    best_epoch_selection_metric: str = "composite"
+    selection_weight_iou: float = 0.24
+    selection_weight_dice: float = 0.24
+    selection_weight_precision: float = 0.08
+    selection_weight_recall: float = 0.08
+    selection_weight_count_exact_rate: float = 0.10
+    selection_weight_player_exact_rate: float = 0.10
+    selection_weight_scene_player_exact_rate: float = 0.10
+    selection_weight_count_mae: float = 0.03
+    selection_weight_player_count_mae: float = 0.03
 
 
 # --------------------------------------------------------------------------- #
@@ -162,15 +178,228 @@ def dice_loss_from_logits(logits: torch.Tensor, targets: torch.Tensor, eps: floa
     return 1.0 - dice
 
 
+def overlap_metrics_from_logits(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    threshold: float = 0.5,
+    eps: float = 1e-6,
+) -> dict[str, float]:
+    probs = torch.sigmoid(logits)
+    preds = (probs > threshold).float()
+    targets = (targets > 0.5).float()
+
+    tp = (preds * targets).sum(dim=(1, 2, 3))
+    fp = (preds * (1.0 - targets)).sum(dim=(1, 2, 3))
+    fn = ((1.0 - preds) * targets).sum(dim=(1, 2, 3))
+    union = tp + fp + fn
+
+    iou = (tp + eps) / (union + eps)
+    precision = (tp + eps) / (tp + fp + eps)
+    recall = (tp + eps) / (tp + fn + eps)
+    dice = (2.0 * tp + eps) / (2.0 * tp + fp + fn + eps)
+
+    return {
+        "iou": float(iou.mean().item()),
+        "precision": float(precision.mean().item()),
+        "recall": float(recall.mean().item()),
+        "dice": float(dice.mean().item()),
+    }
+
+
 def iou_score_from_logits(
     logits: torch.Tensor, targets: torch.Tensor, threshold: float = 0.5, eps: float = 1e-6
 ) -> float:
-    probs = torch.sigmoid(logits)
-    preds = (probs > threshold).float()
-    inter = (preds * targets).sum(dim=(1, 2, 3))
-    union = ((preds + targets) > 0).float().sum(dim=(1, 2, 3))
-    iou = (inter + eps) / (union + eps)
-    return iou.mean().item()
+    return overlap_metrics_from_logits(logits, targets, threshold=threshold, eps=eps)["iou"]
+
+
+_PLAYER_KEYS = ("p1", "p2", "p3", "p4")
+
+
+def _resolve_min_component_area(mask_height: int, mask_width: int, configured_value: int | None) -> int:
+    if configured_value is not None:
+        return max(1, int(configured_value))
+    return max(10, int(round(0.00012 * float(mask_height * mask_width))))
+
+
+def _connected_component_boxes(mask_2d: np.ndarray, min_component_area: int) -> list[tuple[int, int, int, int]]:
+    binary = (mask_2d > 0).astype(np.uint8)
+    n_labels, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    boxes: list[tuple[int, int, int, int]] = []
+    for label_idx in range(1, n_labels):
+        area = int(stats[label_idx, cv2.CC_STAT_AREA])
+        if area < min_component_area:
+            continue
+        x = int(stats[label_idx, cv2.CC_STAT_LEFT])
+        y = int(stats[label_idx, cv2.CC_STAT_TOP])
+        w = int(stats[label_idx, cv2.CC_STAT_WIDTH])
+        h = int(stats[label_idx, cv2.CC_STAT_HEIGHT])
+        boxes.append((x, y, x + w, y + h))
+    return boxes
+
+
+def _count_cards_by_player(
+    mask_2d: np.ndarray,
+    min_component_area: int | None = None,
+) -> tuple[dict[str, int], int, int]:
+    mask_height, mask_width = mask_2d.shape
+    min_area = _resolve_min_component_area(mask_height, mask_width, min_component_area)
+    boxes = _connected_component_boxes(mask_2d, min_area)
+
+    player_counts = {player: 0 for player in _PLAYER_KEYS}
+    center_count = 0
+    for box in boxes:
+        region = assign_region(box, image_width=mask_width, image_height=mask_height)
+        if region in player_counts:
+            player_counts[region] += 1
+        elif region == "center":
+            center_count += 1
+
+    return player_counts, center_count, len(boxes)
+
+
+def _count_metrics_from_logits(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    threshold: float = 0.5,
+    min_component_area: int | None = None,
+) -> dict[str, float]:
+    preds = (torch.sigmoid(logits) > threshold).to(torch.uint8).cpu().numpy()
+    gts = (targets > 0.5).to(torch.uint8).cpu().numpy()
+
+    batch_size = int(preds.shape[0])
+    if batch_size == 0:
+        return {
+            "count_mae": 0.0,
+            "count_exact_rate": 0.0,
+            "player_count_mae": 0.0,
+            "player_exact_rate": 0.0,
+            "scene_player_exact_rate": 0.0,
+            "pred_count_mean": 0.0,
+            "gt_count_mean": 0.0,
+            "player_count_mae_p1": 0.0,
+            "player_count_mae_p2": 0.0,
+            "player_count_mae_p3": 0.0,
+            "player_count_mae_p4": 0.0,
+        }
+
+    abs_total_error_sum = 0.0
+    exact_total_matches = 0
+    abs_player_error_sum = 0.0
+    exact_player_slots = 0
+    exact_player_scenes = 0
+    pred_total_sum = 0.0
+    gt_total_sum = 0.0
+    abs_player_error_by_player = {player: 0.0 for player in _PLAYER_KEYS}
+
+    for sample_idx in range(batch_size):
+        pred_counts, _, pred_total = _count_cards_by_player(
+            preds[sample_idx, 0], min_component_area=min_component_area,
+        )
+        gt_counts, _, gt_total = _count_cards_by_player(
+            gts[sample_idx, 0], min_component_area=min_component_area,
+        )
+
+        pred_total_sum += float(pred_total)
+        gt_total_sum += float(gt_total)
+
+        total_error = abs(pred_total - gt_total)
+        abs_total_error_sum += float(total_error)
+        if total_error == 0:
+            exact_total_matches += 1
+
+        sample_all_players_exact = True
+        for player in _PLAYER_KEYS:
+            player_error = abs(pred_counts[player] - gt_counts[player])
+            abs_player_error_sum += float(player_error)
+            abs_player_error_by_player[player] += float(player_error)
+            if player_error == 0:
+                exact_player_slots += 1
+            else:
+                sample_all_players_exact = False
+
+        if sample_all_players_exact:
+            exact_player_scenes += 1
+
+    player_slots = batch_size * len(_PLAYER_KEYS)
+    return {
+        "count_mae": abs_total_error_sum / batch_size,
+        "count_exact_rate": exact_total_matches / batch_size,
+        "player_count_mae": abs_player_error_sum / max(player_slots, 1),
+        "player_exact_rate": exact_player_slots / max(player_slots, 1),
+        "scene_player_exact_rate": exact_player_scenes / batch_size,
+        "pred_count_mean": pred_total_sum / batch_size,
+        "gt_count_mean": gt_total_sum / batch_size,
+        "player_count_mae_p1": abs_player_error_by_player["p1"] / batch_size,
+        "player_count_mae_p2": abs_player_error_by_player["p2"] / batch_size,
+        "player_count_mae_p3": abs_player_error_by_player["p3"] / batch_size,
+        "player_count_mae_p4": abs_player_error_by_player["p4"] / batch_size,
+    }
+
+
+def _inverse_error_score(value: float) -> float:
+    return 1.0 / (1.0 + max(0.0, float(value)))
+
+
+def _selection_metric_score(val_metrics: dict[str, float], cfg: SegmenterPipelineConfig) -> float:
+    metric = cfg.best_epoch_selection_metric.strip().lower()
+
+    direct_metrics: dict[str, str] = {
+        "val_iou": "iou",
+        "iou": "iou",
+        "val_dice": "dice",
+        "dice": "dice",
+        "val_precision": "precision",
+        "precision": "precision",
+        "val_recall": "recall",
+        "recall": "recall",
+        "val_count_exact_rate": "count_exact_rate",
+        "count_exact_rate": "count_exact_rate",
+        "val_player_exact_rate": "player_exact_rate",
+        "player_exact_rate": "player_exact_rate",
+        "val_scene_player_exact_rate": "scene_player_exact_rate",
+        "scene_player_exact_rate": "scene_player_exact_rate",
+    }
+
+    inverse_error_metrics: dict[str, str] = {
+        "neg_val_count_mae": "count_mae",
+        "inv_val_count_mae": "count_mae",
+        "neg_val_player_count_mae": "player_count_mae",
+        "inv_val_player_count_mae": "player_count_mae",
+    }
+
+    if metric in direct_metrics:
+        return float(val_metrics[direct_metrics[metric]])
+    if metric in inverse_error_metrics:
+        return _inverse_error_score(float(val_metrics[inverse_error_metrics[metric]]))
+    if metric != "composite":
+        raise ValueError(
+            "Unsupported best_epoch_selection_metric. "
+            "Use one of: composite, val_iou, val_dice, val_precision, val_recall, "
+            "val_count_exact_rate, val_player_exact_rate, val_scene_player_exact_rate, "
+            "neg_val_count_mae, neg_val_player_count_mae."
+        )
+
+    weighted_terms = [
+        (float(cfg.selection_weight_iou), float(val_metrics["iou"])),
+        (float(cfg.selection_weight_dice), float(val_metrics["dice"])),
+        (float(cfg.selection_weight_precision), float(val_metrics["precision"])),
+        (float(cfg.selection_weight_recall), float(val_metrics["recall"])),
+        (float(cfg.selection_weight_count_exact_rate), float(val_metrics["count_exact_rate"])),
+        (float(cfg.selection_weight_player_exact_rate), float(val_metrics["player_exact_rate"])),
+        (float(cfg.selection_weight_scene_player_exact_rate), float(val_metrics["scene_player_exact_rate"])),
+        (float(cfg.selection_weight_count_mae), _inverse_error_score(float(val_metrics["count_mae"]))),
+        (
+            float(cfg.selection_weight_player_count_mae),
+            _inverse_error_score(float(val_metrics["player_count_mae"])),
+        ),
+    ]
+
+    total_weight = sum(max(0.0, weight) for weight, _ in weighted_terms)
+    if total_weight <= 0.0:
+        raise ValueError("Composite selection weights must contain at least one positive value.")
+
+    weighted_sum = sum(max(0.0, weight) * value for weight, value in weighted_terms)
+    return float(weighted_sum / total_weight)
 
 
 def _format_seconds(seconds: float) -> str:
@@ -226,8 +455,9 @@ def _train_one_epoch_verbose(
             optimizer.step()
 
         bs = imgs.size(0)
+        overlap = overlap_metrics_from_logits(logits.detach(), masks)
         running_loss += loss.item() * bs
-        running_iou += iou_score_from_logits(logits.detach(), masks) * bs
+        running_iou += overlap["iou"] * bs
         seen += bs
 
         if log_every and (batch_idx == 1 or batch_idx % log_every == 0 or batch_idx == num_batches):
@@ -247,10 +477,37 @@ def _train_one_epoch_verbose(
 
 
 @torch.no_grad()
-def _evaluate(model, loader, bce_loss, amp_enabled, device, bce_weight: float = 0.5, dice_weight: float = 0.5):
+def _evaluate(
+    model,
+    loader,
+    bce_loss,
+    amp_enabled,
+    device,
+    bce_weight: float = 0.5,
+    dice_weight: float = 0.5,
+    eval_threshold: float = 0.5,
+    eval_min_component_area: int | None = None,
+):
     model.eval()
     running_loss = 0.0
-    running_iou = 0.0
+    metric_names = [
+        "iou",
+        "precision",
+        "recall",
+        "dice",
+        "count_mae",
+        "count_exact_rate",
+        "player_count_mae",
+        "player_exact_rate",
+        "scene_player_exact_rate",
+        "pred_count_mean",
+        "gt_count_mean",
+        "player_count_mae_p1",
+        "player_count_mae_p2",
+        "player_count_mae_p3",
+        "player_count_mae_p4",
+    ]
+    running_metrics = {name: 0.0 for name in metric_names}
     seen = 0
 
     for imgs, masks in loader:
@@ -264,11 +521,26 @@ def _evaluate(model, loader, bce_loss, amp_enabled, device, bce_weight: float = 
             loss = bce_weight * loss_bce + dice_weight * loss_dice
 
         bs = imgs.size(0)
+        overlap = overlap_metrics_from_logits(logits, masks, threshold=eval_threshold)
+        count_metrics = _count_metrics_from_logits(
+            logits,
+            masks,
+            threshold=eval_threshold,
+            min_component_area=eval_min_component_area,
+        )
+
         running_loss += loss.item() * bs
-        running_iou += iou_score_from_logits(logits, masks) * bs
+        for name in ("iou", "precision", "recall", "dice"):
+            running_metrics[name] += overlap[name] * bs
+        for name in count_metrics:
+            running_metrics[name] += count_metrics[name] * bs
         seen += bs
 
-    return running_loss / max(seen, 1), running_iou / max(seen, 1), seen
+    denom = max(seen, 1)
+    results = {name: value / denom for name, value in running_metrics.items()}
+    results["loss"] = running_loss / denom
+    results["seen"] = float(seen)
+    return results
 
 
 # --------------------------------------------------------------------------- #
@@ -504,6 +776,14 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
         "scene_checkpoint": scene_checkpoint,
         "history": {
             "train_loss": [], "val_loss": [], "train_iou": [], "val_iou": [],
+            "val_selection_score": [],
+            "val_precision": [], "val_recall": [], "val_dice": [],
+            "val_count_mae": [], "val_count_exact_rate": [],
+            "val_player_count_mae": [], "val_player_exact_rate": [],
+            "val_scene_player_exact_rate": [],
+            "val_pred_count_mean": [], "val_gt_count_mean": [],
+            "val_player_count_mae_p1": [], "val_player_count_mae_p2": [],
+            "val_player_count_mae_p3": [], "val_player_count_mae_p4": [],
             "lr": [], "epoch_seconds": [], "train_seconds": [], "val_seconds": [],
             "images_per_sec": [], "gpu_mem_gb": [],
         },
@@ -546,6 +826,7 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     dice_weight = cfg.train_loss_dice_weight / loss_weight_sum
 
     best_val_iou = -1.0
+    best_selection_score = -float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
     global_start = time.perf_counter()
@@ -616,10 +897,29 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         train_seconds = time.perf_counter() - train_start
 
         val_start = time.perf_counter()
-        val_loss, val_iou, _ = _evaluate(
+        val_metrics = _evaluate(
             model, val_loader, bce_loss, use_amp, device,
             bce_weight=bce_weight, dice_weight=dice_weight,
+            eval_threshold=cfg.eval_mask_threshold,
+            eval_min_component_area=cfg.eval_min_component_area,
         )
+        val_loss = float(val_metrics["loss"])
+        val_iou = float(val_metrics["iou"])
+        val_precision = float(val_metrics["precision"])
+        val_recall = float(val_metrics["recall"])
+        val_dice = float(val_metrics["dice"])
+        val_count_mae = float(val_metrics["count_mae"])
+        val_count_exact_rate = float(val_metrics["count_exact_rate"])
+        val_player_count_mae = float(val_metrics["player_count_mae"])
+        val_player_exact_rate = float(val_metrics["player_exact_rate"])
+        val_scene_player_exact_rate = float(val_metrics["scene_player_exact_rate"])
+        val_pred_count_mean = float(val_metrics["pred_count_mean"])
+        val_gt_count_mean = float(val_metrics["gt_count_mean"])
+        val_player_count_mae_p1 = float(val_metrics["player_count_mae_p1"])
+        val_player_count_mae_p2 = float(val_metrics["player_count_mae_p2"])
+        val_player_count_mae_p3 = float(val_metrics["player_count_mae_p3"])
+        val_player_count_mae_p4 = float(val_metrics["player_count_mae_p4"])
+        selection_score = _selection_metric_score(val_metrics, cfg)
         val_seconds = time.perf_counter() - val_start
 
         scheduler.step(val_iou)
@@ -632,6 +932,21 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         history["val_loss"].append(val_loss)
         history["train_iou"].append(train_iou)
         history["val_iou"].append(val_iou)
+        history["val_selection_score"].append(selection_score)
+        history["val_precision"].append(val_precision)
+        history["val_recall"].append(val_recall)
+        history["val_dice"].append(val_dice)
+        history["val_count_mae"].append(val_count_mae)
+        history["val_count_exact_rate"].append(val_count_exact_rate)
+        history["val_player_count_mae"].append(val_player_count_mae)
+        history["val_player_exact_rate"].append(val_player_exact_rate)
+        history["val_scene_player_exact_rate"].append(val_scene_player_exact_rate)
+        history["val_pred_count_mean"].append(val_pred_count_mean)
+        history["val_gt_count_mean"].append(val_gt_count_mean)
+        history["val_player_count_mae_p1"].append(val_player_count_mae_p1)
+        history["val_player_count_mae_p2"].append(val_player_count_mae_p2)
+        history["val_player_count_mae_p3"].append(val_player_count_mae_p3)
+        history["val_player_count_mae_p4"].append(val_player_count_mae_p4)
         history["lr"].append(lr_now)
         history["epoch_seconds"].append(epoch_seconds)
         history["train_seconds"].append(train_seconds)
@@ -639,8 +954,9 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         history["images_per_sec"].append(images_per_sec)
         history["gpu_mem_gb"].append(gpu_mem_gb)
 
-        improved = val_iou > best_val_iou
+        improved = selection_score > best_selection_score
         if improved:
+            best_selection_score = selection_score
             best_val_iou = val_iou
             best_epoch = epoch
             torch.save(model.state_dict(), scene_checkpoint)
@@ -662,7 +978,24 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
 
         print(
             f"  summary | train_loss={train_loss:.4f} val_loss={val_loss:.4f} | "
-            f"train_iou={train_iou:.4f} val_iou={val_iou:.4f} | lr={lr_now:.2e}",
+            f"train_iou={train_iou:.4f} val_iou={val_iou:.4f} val_dice={val_dice:.4f} | "
+            f"val_precision={val_precision:.4f} val_recall={val_recall:.4f} | "
+            f"selection({cfg.best_epoch_selection_metric})={selection_score:.4f} | lr={lr_now:.2e}",
+            flush=True,
+        )
+        print(
+            f"  counts  | cards(pred/gt)={val_pred_count_mean:.2f}/{val_gt_count_mean:.2f} "
+            f"count_mae={val_count_mae:.3f} exact={val_count_exact_rate:.3f} | "
+            f"player_mae={val_player_count_mae:.3f} player_exact={val_player_exact_rate:.3f} "
+            f"scene_player_exact={val_scene_player_exact_rate:.3f}",
+            flush=True,
+        )
+        print(
+            "           "
+            f"per-player MAE: p1={val_player_count_mae_p1:.3f} "
+            f"p2={val_player_count_mae_p2:.3f} "
+            f"p3={val_player_count_mae_p3:.3f} "
+            f"p4={val_player_count_mae_p4:.3f}",
             flush=True,
         )
         print(
@@ -682,13 +1015,116 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
 
     total_seconds = time.perf_counter() - global_start
     print(f"\nTraining finished in {_format_seconds(total_seconds)}", flush=True)
-    print(f"Best val IoU: {best_val_iou:.4f} at epoch {best_epoch}", flush=True)
+    print(
+        f"Best epoch ({cfg.best_epoch_selection_metric}): {best_epoch} "
+        f"with selection score={best_selection_score:.4f}",
+        flush=True,
+    )
+    print(f"Best-epoch val IoU: {best_val_iou:.4f}", flush=True)
+    if best_epoch > 0:
+        best_idx = best_epoch - 1
+        print(
+            f"Best val Dice: {history['val_dice'][best_idx]:.4f} | "
+            f"Best val count MAE: {history['val_count_mae'][best_idx]:.3f} | "
+            f"Best scene player exact: {history['val_scene_player_exact_rate'][best_idx]:.3f}",
+            flush=True,
+        )
     print(f"Saved best model: {scene_checkpoint}", flush=True)
 
     state["best_val_iou"] = float(best_val_iou)
+    state["best_selection_score"] = float(best_selection_score)
+    state["best_selection_metric"] = str(cfg.best_epoch_selection_metric)
     state["best_epoch"] = int(best_epoch)
     state["training_seconds"] = float(total_seconds)
+    if best_epoch > 0:
+        best_idx = best_epoch - 1
+        state["best_val_metrics"] = {
+            "val_iou": float(history["val_iou"][best_idx]),
+            "val_selection_score": float(history["val_selection_score"][best_idx]),
+            "val_dice": float(history["val_dice"][best_idx]),
+            "val_precision": float(history["val_precision"][best_idx]),
+            "val_recall": float(history["val_recall"][best_idx]),
+            "val_count_mae": float(history["val_count_mae"][best_idx]),
+            "val_count_exact_rate": float(history["val_count_exact_rate"][best_idx]),
+            "val_player_count_mae": float(history["val_player_count_mae"][best_idx]),
+            "val_player_exact_rate": float(history["val_player_exact_rate"][best_idx]),
+            "val_scene_player_exact_rate": float(history["val_scene_player_exact_rate"][best_idx]),
+            "val_pred_count_mean": float(history["val_pred_count_mean"][best_idx]),
+            "val_gt_count_mean": float(history["val_gt_count_mean"][best_idx]),
+            "val_player_count_mae_p1": float(history["val_player_count_mae_p1"][best_idx]),
+            "val_player_count_mae_p2": float(history["val_player_count_mae_p2"][best_idx]),
+            "val_player_count_mae_p3": float(history["val_player_count_mae_p3"][best_idx]),
+            "val_player_count_mae_p4": float(history["val_player_count_mae_p4"][best_idx]),
+        }
     return state
+
+
+@torch.no_grad()
+def evaluate_segmenter_validation(state: dict[str, Any], load_best_checkpoint: bool = True) -> dict[str, float]:
+    model: nn.Module = state["model"]
+    val_loader: DataLoader = state["val_loader"]
+    bce_loss: nn.Module = state["bce_loss"]
+    use_amp: bool = state["use_amp"]
+    device: torch.device = state["device"]
+    scene_checkpoint: Path = state["scene_checkpoint"]
+    cfg: SegmenterPipelineConfig = state["config"]
+
+    if load_best_checkpoint and scene_checkpoint.is_file():
+        model.load_state_dict(torch.load(scene_checkpoint, map_location=device))
+
+    loss_weight_sum = cfg.train_loss_bce_weight + cfg.train_loss_dice_weight
+    if loss_weight_sum <= 0:
+        raise ValueError("train_loss_bce_weight + train_loss_dice_weight must be > 0.")
+    bce_weight = cfg.train_loss_bce_weight / loss_weight_sum
+    dice_weight = cfg.train_loss_dice_weight / loss_weight_sum
+
+    metrics = _evaluate(
+        model,
+        val_loader,
+        bce_loss,
+        use_amp,
+        device,
+        bce_weight=bce_weight,
+        dice_weight=dice_weight,
+        eval_threshold=cfg.eval_mask_threshold,
+        eval_min_component_area=cfg.eval_min_component_area,
+    )
+    selection_score = _selection_metric_score(metrics, cfg)
+
+    print(
+        f"Validation metrics | loss={metrics['loss']:.4f} iou={metrics['iou']:.4f} "
+        f"dice={metrics['dice']:.4f} precision={metrics['precision']:.4f} "
+        f"recall={metrics['recall']:.4f}",
+        flush=True,
+    )
+    print(
+        f"Card counts        | cards(pred/gt)={metrics['pred_count_mean']:.2f}/{metrics['gt_count_mean']:.2f} "
+        f"count_mae={metrics['count_mae']:.3f} count_exact={metrics['count_exact_rate']:.3f}",
+        flush=True,
+    )
+    print(
+        f"Per-player counts  | player_mae={metrics['player_count_mae']:.3f} "
+        f"player_exact={metrics['player_exact_rate']:.3f} "
+        f"scene_player_exact={metrics['scene_player_exact_rate']:.3f}",
+        flush=True,
+    )
+    print(
+        f"Selection score    | metric={cfg.best_epoch_selection_metric} "
+        f"score={selection_score:.4f}",
+        flush=True,
+    )
+    print(
+        "Per-player MAE     "
+        f"| p1={metrics['player_count_mae_p1']:.3f} "
+        f"p2={metrics['player_count_mae_p2']:.3f} "
+        f"p3={metrics['player_count_mae_p3']:.3f} "
+        f"p4={metrics['player_count_mae_p4']:.3f}",
+        flush=True,
+    )
+
+    metrics["selection_score"] = float(selection_score)
+    state["last_validation_metrics"] = metrics
+    return metrics
 
 
 # --------------------------------------------------------------------------- #
@@ -697,12 +1133,16 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def plot_training_curves(state: dict[str, Any]) -> None:
+    cfg: SegmenterPipelineConfig = state["config"]
     history = state["history"]
     if len(history["train_loss"]) == 0:
         raise RuntimeError("History is empty. Run the training cell first.")
 
     epochs_x = np.arange(1, len(history["train_loss"]) + 1)
-    best_idx = int(np.argmax(history["val_iou"]))
+    if "val_selection_score" in history and len(history["val_selection_score"]) == len(epochs_x):
+        best_idx = int(np.argmax(history["val_selection_score"]))
+    else:
+        best_idx = int(np.argmax(history["val_iou"]))
     best_epoch_plot = int(epochs_x[best_idx])
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 9))
@@ -715,12 +1155,28 @@ def plot_training_curves(state: dict[str, Any]) -> None:
     axes[0, 0].set_ylabel("Loss")
     axes[0, 0].legend()
 
-    axes[0, 1].plot(epochs_x, history["train_iou"], marker="o", label="train")
-    axes[0, 1].plot(epochs_x, history["val_iou"], marker="o", label="val")
+    axes[0, 1].plot(epochs_x, history["train_iou"], marker="o", label="train IoU")
+    axes[0, 1].plot(epochs_x, history["val_iou"], marker="o", label="val IoU")
+    if "val_dice" in history and len(history["val_dice"]) == len(epochs_x):
+        axes[0, 1].plot(epochs_x, history["val_dice"], marker="o", label="val Dice")
+    if "val_precision" in history and len(history["val_precision"]) == len(epochs_x):
+        axes[0, 1].plot(epochs_x, history["val_precision"], marker="o", label="val Precision")
+    if "val_recall" in history and len(history["val_recall"]) == len(epochs_x):
+        axes[0, 1].plot(epochs_x, history["val_recall"], marker="o", label="val Recall")
+    if "val_selection_score" in history and len(history["val_selection_score"]) == len(epochs_x):
+        axes[0, 1].plot(
+            epochs_x,
+            history["val_selection_score"],
+            marker="o",
+            linestyle="--",
+            color="k",
+            label=f"selection ({cfg.best_epoch_selection_metric})",
+        )
     axes[0, 1].axvline(best_epoch_plot, color="k", linestyle="--", alpha=0.5)
-    axes[0, 1].set_title("IoU")
+    axes[0, 1].set_title("Overlap Metrics")
     axes[0, 1].set_xlabel("Epoch")
-    axes[0, 1].set_ylabel("IoU")
+    axes[0, 1].set_ylabel("Score")
+    axes[0, 1].set_ylim(0.0, 1.02)
     axes[0, 1].legend()
 
     axes[1, 0].plot(epochs_x, history["lr"], marker="o", color="tab:green")
@@ -756,8 +1212,83 @@ def plot_training_curves(state: dict[str, Any]) -> None:
     plt.tight_layout()
     plt.show()
 
+    if "val_count_mae" in history and len(history["val_count_mae"]) == len(epochs_x):
+        fig2, axes2 = plt.subplots(1, 2, figsize=(14, 4.5))
+
+        axes2[0].plot(epochs_x, history["val_count_mae"], marker="o", label="total count MAE")
+        axes2[0].plot(epochs_x, history["val_player_count_mae"], marker="o", label="player count MAE")
+        ax_count_means = axes2[0].twinx()
+        ax_count_means.plot(
+            epochs_x,
+            history["val_pred_count_mean"],
+            marker="o",
+            linestyle="--",
+            color="tab:orange",
+            label="pred cards/scene",
+        )
+        ax_count_means.plot(
+            epochs_x,
+            history["val_gt_count_mean"],
+            marker="o",
+            linestyle="--",
+            color="tab:green",
+            label="gt cards/scene",
+        )
+        axes2[0].axvline(best_epoch_plot, color="k", linestyle="--", alpha=0.5)
+        axes2[0].set_title("Count Error")
+        axes2[0].set_xlabel("Epoch")
+        axes2[0].set_ylabel("Absolute Error")
+        ax_count_means.set_ylabel("Cards Per Scene")
+        handles_1, labels_1 = axes2[0].get_legend_handles_labels()
+        handles_2, labels_2 = ax_count_means.get_legend_handles_labels()
+        axes2[0].legend(handles_1 + handles_2, labels_1 + labels_2, loc="upper right")
+
+        axes2[1].plot(
+            epochs_x,
+            history["val_count_exact_rate"],
+            marker="o",
+            label="exact total card count",
+        )
+        axes2[1].plot(
+            epochs_x,
+            history["val_player_exact_rate"],
+            marker="o",
+            label="exact player slot count",
+        )
+        axes2[1].plot(
+            epochs_x,
+            history["val_scene_player_exact_rate"],
+            marker="o",
+            label="exact all-player counts",
+        )
+        axes2[1].axvline(best_epoch_plot, color="k", linestyle="--", alpha=0.5)
+        axes2[1].set_title("Count Exact-Match Rates")
+        axes2[1].set_xlabel("Epoch")
+        axes2[1].set_ylabel("Rate")
+        axes2[1].set_ylim(0.0, 1.02)
+        axes2[1].legend(loc="lower right")
+
+        for ax in axes2.ravel():
+            ax.grid(alpha=0.25)
+
+        plt.suptitle("Scene Segmenter Count Diagnostics", fontsize=13)
+        plt.tight_layout()
+        plt.show()
+
     print(f"Best epoch: {best_epoch_plot}")
+    if "val_selection_score" in history and len(history["val_selection_score"]) == len(epochs_x):
+        print(
+            f"Best selection score ({cfg.best_epoch_selection_metric}): "
+            f"{history['val_selection_score'][best_idx]:.4f}"
+        )
     print(f"Best val IoU: {history['val_iou'][best_idx]:.4f}")
+    if "val_dice" in history and len(history["val_dice"]) == len(epochs_x):
+        print(f"Best val Dice: {history['val_dice'][best_idx]:.4f}")
+    if "val_count_mae" in history and len(history["val_count_mae"]) == len(epochs_x):
+        print(
+            f"Best val count MAE: {history['val_count_mae'][best_idx]:.3f} | "
+            f"Best exact all-player rate: {history['val_scene_player_exact_rate'][best_idx]:.3f}"
+        )
     print(f"Epoch time at best epoch: {history['epoch_seconds'][best_idx]:.2f}s")
     print(f"Mean throughput: {np.mean(history['images_per_sec']):.2f} img/s")
 
@@ -788,12 +1319,23 @@ def plot_segmentation_predictions(state: dict[str, Any], num_show: int | None = 
             img_t, mask_t = val_ds[int(idx)]
             logits = model(img_t.unsqueeze(0).to(device))
             pred = torch.sigmoid(logits)[0, 0].cpu().numpy()
-            pred_bin = (pred > 0.5).astype(np.float32)
+            pred_bin = (pred > cfg.eval_mask_threshold).astype(np.float32)
 
             gt = mask_t[0].cpu().numpy()
             inter = np.logical_and(pred_bin > 0.5, gt > 0.5).sum()
             union = np.logical_or(pred_bin > 0.5, gt > 0.5).sum()
             sample_iou = (inter + 1e-6) / (union + 1e-6)
+            pred_counts, _, pred_total = _count_cards_by_player(
+                pred_bin,
+                min_component_area=cfg.eval_min_component_area,
+            )
+            gt_counts, _, gt_total = _count_cards_by_player(
+                gt,
+                min_component_area=cfg.eval_min_component_area,
+            )
+            sample_player_mae = float(
+                np.mean([abs(pred_counts[player] - gt_counts[player]) for player in _PLAYER_KEYS])
+            )
 
             axes[row, 0].imshow(denormalize_image(img_t))
             axes[row, 0].set_title("Image")
@@ -804,7 +1346,10 @@ def plot_segmentation_predictions(state: dict[str, Any], num_show: int | None = 
             axes[row, 1].axis("off")
 
             axes[row, 2].imshow(pred_bin, cmap="gray")
-            axes[row, 2].set_title(f"Pred Mask (IoU={sample_iou:.3f})")
+            axes[row, 2].set_title(
+                f"Pred (IoU={sample_iou:.3f}, cards={pred_total}/{gt_total}, "
+                f"player-MAE={sample_player_mae:.2f})"
+            )
             axes[row, 2].axis("off")
 
     plt.tight_layout()

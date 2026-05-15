@@ -457,6 +457,7 @@ def make_loader(
     balanced: bool = False,
     samples_per_epoch: int | None = None,
     sampler_seed: int | None = None,
+    persistent_workers: bool = True,
 ) -> tuple[DataLoader, CardMaskedDataset]:
     dataset = CardMaskedDataset(
         samples=samples,
@@ -486,6 +487,7 @@ def make_loader(
         sampler=sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
+        persistent_workers=bool(persistent_workers and num_workers > 0),
     )
     return loader, dataset
 

@@ -1,6 +1,7 @@
 """Training pipeline for the scene segmenter (SceneUNetSmall)."""
 
 from .pipeline import (
+    evaluate_segmenter_validation,
     SegmenterPipelineConfig,
     SceneSegDataset,
     initialize_segmenter_pipeline,
@@ -11,6 +12,7 @@ from .pipeline import (
 )
 
 __all__ = [
+    "evaluate_segmenter_validation",
     "SegmenterPipelineConfig",
     "SceneSegDataset",
     "initialize_segmenter_pipeline",
