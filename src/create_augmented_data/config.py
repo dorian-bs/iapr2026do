@@ -19,6 +19,10 @@ class CreateAugmentedDataConfig:
     # RGB card output: JPEG is usually a better speed/size tradeoff for training.
     aug_card_image_format: str = "jpg"  # png | jpg | jpeg
     aug_card_jpeg_quality: int = 85
+    # Parallel card generation controls. workers=0 auto-selects up to 8 workers.
+    aug_card_generation_workers: int = 0
+    aug_card_generation_backend: str = "process"  # process | thread
+    aug_card_generation_chunk_size: int = 32
 
     # Scene generation knobs.
     n_scenes: int = 8192
@@ -45,6 +49,10 @@ class CreateAugmentedDataConfig:
     # RGB scene output: JPEG reduces storage and typically speeds up loading.
     scene_image_format: str = "jpg"  # png | jpg | jpeg
     scene_jpeg_quality: int = 80
+    # Parallel scene generation controls. workers=0 auto-selects up to 8 workers.
+    scene_generation_workers: int = 0
+    scene_generation_backend: str = "process"  # process | thread
+    scene_generation_chunk_size: int = 16
 
     # Card-shadow knobs for scene generation. Direction is sampled once per
     # scene and reused for all cards in that scene.

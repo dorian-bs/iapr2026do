@@ -12,8 +12,10 @@ Public surface mirrors the train_classifier_CNN pipeline pattern:
 """
 from __future__ import annotations
 
+import os
 import csv
 import json
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from typing import Any
 
 import cv2
@@ -23,9 +25,11 @@ from .augmentation import compose_augmented_scene, render_augmented_card
 from .config import CreateAugmentedDataConfig
 from .data import (
     AssetCaches,
+    PLAYERS,
     Paths,
     build_asset_caches,
     ensure_output_dirs,
+    load_or_make_token,
     load_reference_card_assets,
     resolve_paths,
 )
@@ -35,6 +39,149 @@ try:
 except ImportError:  # pragma: no cover - tqdm is optional
     def tqdm(values):
         return values
+
+
+_SCENE_WORKER_CARD_ASSETS: list[Any] | None = None
+_SCENE_WORKER_CFG: CreateAugmentedDataConfig | None = None
+_SCENE_WORKER_PATHS: Paths | None = None
+_SCENE_WORKER_CACHES: AssetCaches | None = None
+_SCENE_WORKER_FMT: str | None = None
+
+_CARD_WORKER_CARD_ASSETS: list[Any] | None = None
+_CARD_WORKER_CFG: CreateAugmentedDataConfig | None = None
+_CARD_WORKER_PATHS: Paths | None = None
+_CARD_WORKER_CACHES: AssetCaches | None = None
+_CARD_WORKER_FMT: str | None = None
+
+
+def _resolve_card_worker_count(cfg: CreateAugmentedDataConfig, total_augmented: int) -> int:
+    requested = int(cfg.aug_card_generation_workers)
+    if requested < 0:
+        raise ValueError("aug_card_generation_workers must be >= 0.")
+
+    if requested == 0:
+        auto_workers = min(8, max(1, os.cpu_count() or 1))
+        return min(auto_workers, max(1, total_augmented))
+
+    return min(requested, max(1, total_augmented))
+
+
+def _resolve_card_backend(cfg: CreateAugmentedDataConfig) -> str:
+    backend = str(cfg.aug_card_generation_backend).strip().lower()
+    if backend not in {"process", "thread"}:
+        raise ValueError("aug_card_generation_backend must be either 'process' or 'thread'.")
+    return backend
+
+
+def _resolve_card_chunk_size(cfg: CreateAugmentedDataConfig) -> int:
+    return max(1, int(cfg.aug_card_generation_chunk_size))
+
+
+def _resolve_scene_worker_count(cfg: CreateAugmentedDataConfig) -> int:
+    requested = int(cfg.scene_generation_workers)
+    if requested < 0:
+        raise ValueError("scene_generation_workers must be >= 0.")
+
+    if requested == 0:
+        auto_workers = min(8, max(1, os.cpu_count() or 1))
+        return min(auto_workers, max(1, int(cfg.n_scenes)))
+
+    return min(requested, max(1, int(cfg.n_scenes)))
+
+
+def _resolve_scene_backend(cfg: CreateAugmentedDataConfig) -> str:
+    backend = str(cfg.scene_generation_backend).strip().lower()
+    if backend not in {"process", "thread"}:
+        raise ValueError("scene_generation_backend must be either 'process' or 'thread'.")
+    return backend
+
+
+def _resolve_scene_chunk_size(cfg: CreateAugmentedDataConfig) -> int:
+    return max(1, int(cfg.scene_generation_chunk_size))
+
+
+def _prime_scene_runtime_caches(
+    cfg: CreateAugmentedDataConfig,
+    paths: Paths,
+    caches: AssetCaches,
+) -> None:
+    """Warm token caches so workers avoid repeated setup in hot loops."""
+    warmup_rng = np.random.default_rng(cfg.seed + 31_415)
+    for style_key in ("white_rect", "funky_round"):
+        for player_name in PLAYERS:
+            load_or_make_token(style_key, player_name, warmup_rng, cfg.scene_height, paths, caches)
+
+
+def _compose_and_save_scene(
+    scene_index: int,
+    scene_seed: int,
+    card_assets: list[Any],
+    cfg: CreateAugmentedDataConfig,
+    paths: Paths,
+    caches: AssetCaches,
+    scene_fmt: str,
+) -> dict[str, Any]:
+    scene_rng = np.random.default_rng(scene_seed)
+    scene_bgr, scene_mask, scene_metadata = compose_augmented_scene(
+        card_assets, scene_rng, cfg, paths, caches
+    )
+    scene_name = f"aug_scene_{scene_index:05d}"
+    image_path = paths.scenes_img_dir / f"{scene_name}.{scene_fmt}"
+    mask_path = paths.scenes_mask_dir / f"{scene_name}.png"
+
+    _write_rgb_image(image_path, scene_bgr, fmt=scene_fmt, jpeg_quality=cfg.scene_jpeg_quality)
+    mask_ok = cv2.imwrite(str(mask_path), scene_mask)
+    if not mask_ok:
+        raise OSError(f"Failed to write image: {mask_path}")
+
+    return {
+        "scene": scene_name,
+        "image_path": str(image_path.relative_to(paths.project_root)),
+        "mask_path": str(mask_path.relative_to(paths.project_root)),
+        **scene_metadata,
+    }
+
+
+def _initialize_scene_worker(
+    card_assets: list[Any],
+    cfg: CreateAugmentedDataConfig,
+    paths: Paths,
+    caches: AssetCaches,
+    scene_fmt: str,
+) -> None:
+    global _SCENE_WORKER_CARD_ASSETS
+    global _SCENE_WORKER_CFG
+    global _SCENE_WORKER_PATHS
+    global _SCENE_WORKER_CACHES
+    global _SCENE_WORKER_FMT
+
+    _SCENE_WORKER_CARD_ASSETS = card_assets
+    _SCENE_WORKER_CFG = cfg
+    _SCENE_WORKER_PATHS = paths
+    _SCENE_WORKER_CACHES = caches
+    _SCENE_WORKER_FMT = scene_fmt
+
+
+def _run_scene_worker(task: tuple[int, int]) -> dict[str, Any]:
+    scene_index, scene_seed = task
+    if (
+        _SCENE_WORKER_CARD_ASSETS is None
+        or _SCENE_WORKER_CFG is None
+        or _SCENE_WORKER_PATHS is None
+        or _SCENE_WORKER_CACHES is None
+        or _SCENE_WORKER_FMT is None
+    ):
+        raise RuntimeError("Scene worker was not initialized.")
+
+    return _compose_and_save_scene(
+        scene_index=scene_index,
+        scene_seed=scene_seed,
+        card_assets=_SCENE_WORKER_CARD_ASSETS,
+        cfg=_SCENE_WORKER_CFG,
+        paths=_SCENE_WORKER_PATHS,
+        caches=_SCENE_WORKER_CACHES,
+        scene_fmt=_SCENE_WORKER_FMT,
+    )
 
 
 def _normalize_image_format(value: str) -> str:
@@ -130,6 +277,78 @@ def _clear_scene_outputs(paths: Paths) -> None:
         paths.scenes_labels_path.unlink()
 
 
+def _compose_and_save_augmented_card(
+    aug_index: int,
+    aug_seed: int,
+    asset_index: int,
+    card_assets: list[Any],
+    cfg: CreateAugmentedDataConfig,
+    paths: Paths,
+    caches: AssetCaches,
+    card_fmt: str,
+) -> dict[str, str]:
+    asset = card_assets[asset_index]
+    rng_card = np.random.default_rng(aug_seed)
+    aug_img, aug_mask = render_augmented_card(asset, rng_card, cfg, paths, caches)
+    image_id = f"aug_{aug_index:05d}"
+    image_path = paths.aug_cards_dir / f"{image_id}.{card_fmt}"
+    mask_path = paths.aug_masks_dir / f"{image_id}.png"
+
+    _write_rgb_image(image_path, aug_img, fmt=card_fmt, jpeg_quality=cfg.aug_card_jpeg_quality)
+    mask_ok = cv2.imwrite(str(mask_path), aug_mask)
+    if not mask_ok:
+        raise OSError(f"Failed to write image: {mask_path}")
+
+    return {
+        "image_id": image_id,
+        "card": asset.label,
+        "mask_path": str(mask_path.relative_to(paths.project_root)),
+    }
+
+
+def _initialize_card_worker(
+    card_assets: list[Any],
+    cfg: CreateAugmentedDataConfig,
+    paths: Paths,
+    caches: AssetCaches,
+    card_fmt: str,
+) -> None:
+    global _CARD_WORKER_CARD_ASSETS
+    global _CARD_WORKER_CFG
+    global _CARD_WORKER_PATHS
+    global _CARD_WORKER_CACHES
+    global _CARD_WORKER_FMT
+
+    _CARD_WORKER_CARD_ASSETS = card_assets
+    _CARD_WORKER_CFG = cfg
+    _CARD_WORKER_PATHS = paths
+    _CARD_WORKER_CACHES = caches
+    _CARD_WORKER_FMT = card_fmt
+
+
+def _run_card_worker(task: tuple[int, int, int]) -> dict[str, str]:
+    aug_index, aug_seed, asset_index = task
+    if (
+        _CARD_WORKER_CARD_ASSETS is None
+        or _CARD_WORKER_CFG is None
+        or _CARD_WORKER_PATHS is None
+        or _CARD_WORKER_CACHES is None
+        or _CARD_WORKER_FMT is None
+    ):
+        raise RuntimeError("Card worker was not initialized.")
+
+    return _compose_and_save_augmented_card(
+        aug_index=aug_index,
+        aug_seed=aug_seed,
+        asset_index=asset_index,
+        card_assets=_CARD_WORKER_CARD_ASSETS,
+        cfg=_CARD_WORKER_CFG,
+        paths=_CARD_WORKER_PATHS,
+        caches=_CARD_WORKER_CACHES,
+        card_fmt=_CARD_WORKER_FMT,
+    )
+
+
 def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
     """Generate single-card augmented crops and save the labels CSV."""
     cfg: CreateAugmentedDataConfig = state["cfg"]
@@ -140,26 +359,55 @@ def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
     if cfg.clear_output_dirs:
         _clear_augmented_card_outputs(paths)
 
-    rng_cards = np.random.default_rng(cfg.seed + 1)
     total_augmented = len(card_assets) * cfg.n_aug_per_reference
-    aug_rows: list[dict[str, str]] = []
     card_fmt = _normalize_image_format(cfg.aug_card_image_format)
+    rng_cards = np.random.default_rng(cfg.seed + 1)
 
-    for aug_index in tqdm(range(total_augmented)):
-        asset = card_assets[aug_index % len(card_assets)]
-        aug_img, aug_mask = render_augmented_card(asset, rng_cards, cfg, paths, caches)
-        image_id = f"aug_{aug_index:05d}"
-        image_path = paths.aug_cards_dir / f"{image_id}.{card_fmt}"
-        mask_path = paths.aug_masks_dir / f"{image_id}.png"
-        _write_rgb_image(image_path, aug_img, fmt=card_fmt, jpeg_quality=cfg.aug_card_jpeg_quality)
-        cv2.imwrite(str(mask_path), aug_mask)
-        aug_rows.append(
-            {
-                "image_id": image_id,
-                "card": asset.label,
-                "mask_path": str(mask_path.relative_to(paths.project_root)),
-            }
+    card_tasks = [
+        (aug_index, int(aug_seed), aug_index % len(card_assets))
+        for aug_index, aug_seed in enumerate(
+            rng_cards.integers(
+                0,
+                np.iinfo(np.uint32).max,
+                size=total_augmented,
+                dtype=np.uint32,
+            )
         )
+    ]
+
+    aug_rows: list[dict[str, str]] = []
+    worker_count = _resolve_card_worker_count(cfg, total_augmented)
+    backend = _resolve_card_backend(cfg)
+
+    if worker_count <= 1:
+        for task in tqdm(card_tasks):
+            aug_rows.append(
+                _compose_and_save_augmented_card(
+                    aug_index=task[0],
+                    aug_seed=task[1],
+                    asset_index=task[2],
+                    card_assets=card_assets,
+                    cfg=cfg,
+                    paths=paths,
+                    caches=caches,
+                    card_fmt=card_fmt,
+                )
+            )
+    else:
+        print(f"Generating augmented cards with {worker_count} {backend} workers...")
+        executor_cls = ProcessPoolExecutor if backend == "process" else ThreadPoolExecutor
+        with executor_cls(
+            max_workers=worker_count,
+            initializer=_initialize_card_worker,
+            initargs=(card_assets, cfg, paths, caches, card_fmt),
+        ) as executor:
+            if backend == "process":
+                mapped = executor.map(_run_card_worker, card_tasks, chunksize=_resolve_card_chunk_size(cfg))
+            else:
+                mapped = executor.map(_run_card_worker, card_tasks)
+
+            for row in tqdm(mapped, total=len(card_tasks)):
+                aug_rows.append(row)
 
     with paths.aug_csv_path.open("w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=["image_id", "card", "mask_path"])
@@ -203,28 +451,52 @@ def run_scene_generation(state: dict[str, Any]) -> dict[str, Any]:
     if cfg.clear_output_dirs:
         _clear_scene_outputs(paths)
 
-    rng_dataset = np.random.default_rng(cfg.seed)
-    all_scene_metadata: list[dict[str, Any]] = []
     scene_fmt = _normalize_image_format(cfg.scene_image_format)
+    _prime_scene_runtime_caches(cfg, paths, caches)
 
-    for scene_index in tqdm(range(cfg.n_scenes)):
-        scene_bgr, scene_mask, scene_metadata = compose_augmented_scene(
-            card_assets, rng_dataset, cfg, paths, caches
+    scene_tasks = [
+        (scene_index, int(scene_seed))
+        for scene_index, scene_seed in enumerate(
+            np.random.default_rng(cfg.seed).integers(
+                0,
+                np.iinfo(np.uint32).max,
+                size=int(cfg.n_scenes),
+                dtype=np.uint32,
+            )
         )
-        scene_name = f"aug_scene_{scene_index:05d}"
-        image_path = paths.scenes_img_dir / f"{scene_name}.{scene_fmt}"
-        mask_path = paths.scenes_mask_dir / f"{scene_name}.png"
+    ]
 
-        _write_rgb_image(image_path, scene_bgr, fmt=scene_fmt, jpeg_quality=cfg.scene_jpeg_quality)
-        cv2.imwrite(str(mask_path), scene_mask)
+    all_scene_metadata: list[dict[str, Any]] = []
+    worker_count = _resolve_scene_worker_count(cfg)
+    backend = _resolve_scene_backend(cfg)
 
-        scene_metadata = {
-            "scene": scene_name,
-            "image_path": str(image_path.relative_to(paths.project_root)),
-            "mask_path": str(mask_path.relative_to(paths.project_root)),
-            **scene_metadata,
-        }
-        all_scene_metadata.append(scene_metadata)
+    if worker_count <= 1:
+        for task in tqdm(scene_tasks):
+            scene_metadata = _compose_and_save_scene(
+                scene_index=task[0],
+                scene_seed=task[1],
+                card_assets=card_assets,
+                cfg=cfg,
+                paths=paths,
+                caches=caches,
+                scene_fmt=scene_fmt,
+            )
+            all_scene_metadata.append(scene_metadata)
+    else:
+        print(f"Generating scenes with {worker_count} {backend} workers...")
+        executor_cls = ProcessPoolExecutor if backend == "process" else ThreadPoolExecutor
+        with executor_cls(
+            max_workers=worker_count,
+            initializer=_initialize_scene_worker,
+            initargs=(card_assets, cfg, paths, caches, scene_fmt),
+        ) as executor:
+            if backend == "process":
+                mapped = executor.map(_run_scene_worker, scene_tasks, chunksize=_resolve_scene_chunk_size(cfg))
+            else:
+                mapped = executor.map(_run_scene_worker, scene_tasks)
+
+            for scene_metadata in tqdm(mapped, total=len(scene_tasks)):
+                all_scene_metadata.append(scene_metadata)
 
     with paths.scenes_labels_path.open("w", encoding="utf-8") as labels_file:
         json.dump(all_scene_metadata, labels_file, indent=2)
