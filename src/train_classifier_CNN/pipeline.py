@@ -108,6 +108,9 @@ class TrainPipelineConfig:
     scene_finetune_freeze_bn_stats: bool = True
     grad_clip_norm: float = 1.0
     predicted_cache_binary_masks: bool = True
+    use_precomputed_predicted_masks: bool = True
+    predicted_masks_subdir: str = "augmented_scenes_predicted"
+    allow_predicted_mask_fallback_generation: bool = True
 
     # Optional memory/runtime caps.
     # Limits are applied on unique scene images (not card instances).
@@ -203,6 +206,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     ref_cards_dir = training_data / "training_images" / "reference_cards"
     scene_images_dir = training_data / "training_images" / "augmented_scenes"
     scene_masks_dir = training_data / "training_masks" / "augmented_scenes"
+    predicted_masks_dir = training_data / "training_masks" / cfg.predicted_masks_subdir
     aug_csv = training_data / "object_labels" / "augmented_cards" / "aug.csv"
     aug_cards_dir = training_data / "training_images" / "augmented_cards"
     aug_masks_dir = training_data / "training_masks" / "augmented_cards"
@@ -239,6 +243,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     print(f"Segmenter checkpoint: {scene_segmenter_path}")
     print(f"Device: {device}")
     print(f"Augmented-card masks: {aug_masks_dir}")
+    print(f"Predicted-scene masks (preferred): {predicted_masks_dir}")
 
     # ---------------- sample loading ----------------
     reference_samples, missing_ref = load_reference_samples(reference_csv, ref_cards_dir)
@@ -314,10 +319,66 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
 
     stage4_enabled = int(cfg.stage_4_epochs) > 0
     if stage4_enabled:
-        scene_predicted_train_samples = derive_scene_predicted_samples(scene_train_samples)
-        scene_predicted_val_samples = derive_scene_predicted_samples(scene_val_samples)
+        using_disk_predicted_masks = False
+        predicted_scene_probs: dict[str, np.ndarray] | None = None
 
-        # ---------------- predicted-mask cache ----------------
+        if cfg.use_precomputed_predicted_masks:
+            if predicted_masks_dir.is_dir():
+                scene_predicted_train_samples = derive_scene_predicted_samples(
+                    scene_train_samples,
+                    predicted_masks_dir=predicted_masks_dir,
+                )
+                scene_predicted_val_samples = derive_scene_predicted_samples(
+                    scene_val_samples,
+                    predicted_masks_dir=predicted_masks_dir,
+                )
+
+                expected_scene_paths = {
+                    s.image_path.resolve() for s in (scene_train_samples + scene_val_samples)
+                }
+                found_scene_paths = {
+                    s.image_path.resolve()
+                    for s in (scene_predicted_train_samples + scene_predicted_val_samples)
+                }
+                missing_scene_paths = sorted(expected_scene_paths - found_scene_paths)
+
+                if missing_scene_paths:
+                    print(
+                        "[warn] Precomputed predicted masks are incomplete: "
+                        f"missing {len(missing_scene_paths)} / {len(expected_scene_paths)} scenes "
+                        f"(first missing: {missing_scene_paths[0]})"
+                    )
+                else:
+                    using_disk_predicted_masks = True
+                    predicted_cache_mode = f"disk_precomputed_masks:{predicted_masks_dir}"
+                    predicted_cache_bytes = 0
+                    print(
+                        "[ok] Using precomputed predicted scene masks from "
+                        f"{predicted_masks_dir}"
+                    )
+            else:
+                print(
+                    "[warn] Precomputed predicted-mask directory not found: "
+                    f"{predicted_masks_dir}"
+                )
+
+        if not using_disk_predicted_masks:
+            if cfg.use_precomputed_predicted_masks and not cfg.allow_predicted_mask_fallback_generation:
+                raise FileNotFoundError(
+                    "Precomputed predicted masks are required for stage 4 but unavailable/incomplete. "
+                    f"Expected masks in: {predicted_masks_dir}. "
+                    "Run segmenter predicted-mask export first or enable "
+                    "allow_predicted_mask_fallback_generation."
+                )
+
+            scene_predicted_train_samples = derive_scene_predicted_samples(scene_train_samples)
+            scene_predicted_val_samples = derive_scene_predicted_samples(scene_val_samples)
+
+            print(
+                "[fallback] Building in-memory predicted scene cache from segmenter checkpoint "
+                "(precomputed masks not used)."
+            )
+
         scene_paths_for_pred = sorted({
             s.image_path.resolve() for s in scene_predicted_train_samples + scene_predicted_val_samples
         })
@@ -340,8 +401,8 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
                 ]
                 scene_paths_for_pred = sorted(capped_pred_paths)
                 print(
-                    "[cap] predicted-mask cache limited to "
-                    f"{len(scene_paths_for_pred)} scenes "
+                    "[cap] predicted-stage scenes limited to "
+                    f"{len(scene_paths_for_pred)} "
                     f"(max_predicted_cache_images={cfg.max_predicted_cache_images}); "
                     f"scene-pred train: {before_pred_train} -> {len(scene_predicted_train_samples)}, "
                     f"scene-pred val: {before_pred_val} -> {len(scene_predicted_val_samples)}"
@@ -352,20 +413,26 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
                     f"{cfg.max_predicted_cache_images} (no-op: dataset has fewer predicted scenes)"
                 )
 
-        cache_threshold = cfg.mask_threshold if cfg.predicted_cache_binary_masks else None
-        predicted_scene_probs = build_scene_probability_cache(
-            scene_paths_for_pred,
-            scene_segmenter_path,
-            device,
-            target_size=cfg.segmenter_img_size,
-            mask_threshold=cache_threshold,
-        )
-        predicted_cache_bytes = int(sum(arr.nbytes for arr in predicted_scene_probs.values()))
-        predicted_cache_mode = "uint8_binary_masks" if cfg.predicted_cache_binary_masks else "float32_probabilities"
+        if using_disk_predicted_masks:
+            predicted_scene_probs = None
+            predicted_cache_bytes = 0
+        else:
+            cache_threshold = cfg.mask_threshold if cfg.predicted_cache_binary_masks else None
+            predicted_scene_probs = build_scene_probability_cache(
+                scene_paths_for_pred,
+                scene_segmenter_path,
+                device,
+                target_size=cfg.segmenter_img_size,
+                mask_threshold=cache_threshold,
+            )
+            predicted_cache_bytes = int(sum(arr.nbytes for arr in predicted_scene_probs.values()))
+            predicted_cache_mode = (
+                "uint8_binary_masks" if cfg.predicted_cache_binary_masks else "float32_probabilities"
+            )
     else:
         scene_predicted_train_samples = []
         scene_predicted_val_samples = []
-        predicted_scene_probs = {}
+        predicted_scene_probs = None
         predicted_cache_bytes = 0
         predicted_cache_mode = "disabled_stage4_epochs_zero"
         print("[skip] Stage 4 disabled (stage_4_epochs <= 0): predicted-mask cache not built.")
@@ -465,6 +532,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         "project_root": project_root,
         "project_dir": project_dir,
         "training_data": training_data,
+        "predicted_masks_dir": predicted_masks_dir,
         "models_dir": models_dir,
         "classifier_bundle_dir": classifier_bundle_dir,
         "device": device,
@@ -1158,6 +1226,11 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
         "min_epochs_per_stage": cfg.min_epochs_per_stage,
         "max_loaded_scene_images": cfg.max_loaded_scene_images,
         "max_predicted_cache_images": cfg.max_predicted_cache_images,
+        "use_precomputed_predicted_masks": cfg.use_precomputed_predicted_masks,
+        "predicted_masks_subdir": cfg.predicted_masks_subdir,
+        "allow_predicted_mask_fallback_generation": cfg.allow_predicted_mask_fallback_generation,
+        "predicted_cache_mode": str(state.get("predicted_cache_mode") or "unknown"),
+        "predicted_cache_bytes": int(state.get("predicted_cache_bytes") or 0),
         "best_selection_policy": "last_stage_best_by_selection_metric",
         "best_selection_metric": str(state.get("best_selection_metric") or cfg.best_epoch_selection_metric),
         "best_selection_score": float(state.get("best_selection_score") or 0.0),

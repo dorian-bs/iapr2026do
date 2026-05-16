@@ -29,7 +29,13 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SubsetRandomSampler
 
 from src.shared.card_models import SceneUNetSmall, assert_param_cap
-from src.shared.card_pipeline import IMAGENET_MEAN, IMAGENET_STD, assign_region, find_workspace_root
+from src.shared.card_pipeline import (
+    IMAGENET_MEAN,
+    IMAGENET_STD,
+    assign_region,
+    find_workspace_root,
+    segment_scene_probability,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -68,6 +74,10 @@ class SegmenterPipelineConfig:
     preview_count: int = 6
     eval_mask_threshold: float = 0.5
     eval_min_component_area: int | None = None
+    export_predicted_masks_after_training: bool = True
+    predicted_masks_subdir: str = "augmented_scenes_predicted"
+    predicted_masks_threshold: float | None = None
+    predicted_masks_overwrite: bool = False
 
     # Checkpoint selection can optimize for overlap-only metrics or a
     # game-state-aware composite score that includes count quality.
@@ -584,6 +594,15 @@ def _build_pairs(scene_images_dir: Path, scene_masks_dir: Path):
     return scene_pairs, missing_masks
 
 
+def _list_scene_images(scene_images_dir: Path) -> list[Path]:
+    valid_img_ext = {".jpg", ".jpeg", ".png"}
+    return [
+        img_path
+        for img_path in sorted(scene_images_dir.iterdir())
+        if img_path.suffix.lower() in valid_img_ext and img_path.is_file()
+    ]
+
+
 def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None) -> dict[str, Any]:
     cfg = config or SegmenterPipelineConfig()
     _seed_everything(cfg.seed)
@@ -592,6 +611,7 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
     training_root = project_root / "project" / "training_data"
     scene_images_dir = training_root / "training_images" / "augmented_scenes"
     scene_masks_dir = training_root / "training_masks" / "augmented_scenes"
+    predicted_scene_masks_dir = training_root / "training_masks" / cfg.predicted_masks_subdir
     models_dir = project_root / "project" / "models" / "segmenter" / "used"
     models_dir.mkdir(parents=True, exist_ok=True)
 
@@ -610,6 +630,7 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
     print(f"Project root: {project_root}")
     print(f"Scene images: {scene_images_dir}")
     print(f"Scene masks: {scene_masks_dir}")
+    print(f"Predicted scene masks output: {predicted_scene_masks_dir}")
     print(f"Model output dir: {models_dir}")
     print(f"torch: {torch.__version__}")
     print(f"Device: {device}")
@@ -754,6 +775,7 @@ def initialize_segmenter_pipeline(config: SegmenterPipelineConfig | None = None)
         "training_root": training_root,
         "scene_images_dir": scene_images_dir,
         "scene_masks_dir": scene_masks_dir,
+        "predicted_scene_masks_dir": predicted_scene_masks_dir,
         "models_dir": models_dir,
         "device": device,
         "use_amp": use_amp,
@@ -1056,7 +1078,126 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
             "val_player_count_mae_p3": float(history["val_player_count_mae_p3"][best_idx]),
             "val_player_count_mae_p4": float(history["val_player_count_mae_p4"][best_idx]),
         }
+
+    if cfg.export_predicted_masks_after_training:
+        export_report = export_predicted_scene_masks(
+            state,
+            output_dir=state.get("predicted_scene_masks_dir"),
+            threshold=cfg.predicted_masks_threshold,
+            overwrite=cfg.predicted_masks_overwrite,
+            load_best_checkpoint=True,
+        )
+        state["predicted_masks_export_report"] = export_report
+        print(
+            "Predicted mask export complete | "
+            f"saved={export_report['written_masks']} skipped={export_report['skipped_existing']} "
+            f"errors={export_report['read_errors']} dir={export_report['output_dir']}",
+            flush=True,
+        )
     return state
+
+
+@torch.no_grad()
+def export_predicted_scene_masks(
+    state: dict[str, Any],
+    output_dir: Path | None = None,
+    threshold: float | None = None,
+    overwrite: bool = False,
+    load_best_checkpoint: bool = True,
+    progress_every: int = 100,
+) -> dict[str, Any]:
+    """Export binary predicted masks for all augmented-scene images.
+
+    Masks are written as uint8 PNG files (0/255) keyed by scene stem. These
+    files can be consumed by classifier stage-4 as disk-backed masks, avoiding
+    the in-memory predicted-probability cache.
+    """
+    cfg: SegmenterPipelineConfig = state["config"]
+    model: nn.Module = state["model"]
+    device: torch.device = state["device"]
+    scene_images_dir: Path = state["scene_images_dir"]
+    scene_checkpoint: Path = state["scene_checkpoint"]
+
+    final_output_dir = Path(output_dir) if output_dir is not None else (
+        state.get("predicted_scene_masks_dir")
+        or (state["training_root"] / "training_masks" / cfg.predicted_masks_subdir)
+    )
+    final_output_dir.mkdir(parents=True, exist_ok=True)
+
+    mask_threshold = threshold
+    if mask_threshold is None:
+        mask_threshold = cfg.predicted_masks_threshold
+    if mask_threshold is None:
+        mask_threshold = cfg.eval_mask_threshold
+    mask_threshold = float(mask_threshold)
+    if not (0.0 < mask_threshold < 1.0):
+        raise ValueError(f"predicted mask threshold must be in (0, 1), got {mask_threshold}")
+
+    if load_best_checkpoint:
+        if not scene_checkpoint.is_file():
+            raise FileNotFoundError(
+                "Cannot export predicted masks because best checkpoint is missing: "
+                f"{scene_checkpoint}"
+            )
+        model.load_state_dict(torch.load(scene_checkpoint, map_location=device), strict=False)
+
+    model.eval()
+    scene_image_paths = _list_scene_images(scene_images_dir)
+    if not scene_image_paths:
+        raise RuntimeError(f"No augmented-scene images found under: {scene_images_dir}")
+
+    written_masks = 0
+    skipped_existing = 0
+    read_errors = 0
+
+    print(
+        "Exporting predicted masks for "
+        f"{len(scene_image_paths)} scenes -> {final_output_dir} (threshold={mask_threshold:.3f})",
+        flush=True,
+    )
+
+    for idx, scene_path in enumerate(scene_image_paths, start=1):
+        out_path = final_output_dir / f"{scene_path.stem}.png"
+        if out_path.exists() and not overwrite:
+            skipped_existing += 1
+            continue
+
+        img_bgr = cv2.imread(str(scene_path), cv2.IMREAD_COLOR)
+        if img_bgr is None:
+            read_errors += 1
+            continue
+
+        prob_map = segment_scene_probability(
+            img_bgr,
+            model,
+            device,
+            target_size=cfg.image_size,
+        )
+        pred_mask = np.where(prob_map > mask_threshold, 255, 0).astype(np.uint8)
+        ok = cv2.imwrite(str(out_path), pred_mask)
+        if not ok:
+            raise IOError(f"Failed to write predicted mask: {out_path}")
+        written_masks += 1
+
+        if idx % progress_every == 0 or idx == len(scene_image_paths):
+            print(
+                f"  {idx}/{len(scene_image_paths)} | "
+                f"written={written_masks} skipped={skipped_existing} errors={read_errors}",
+                flush=True,
+            )
+
+    report = {
+        "output_dir": str(final_output_dir),
+        "threshold": mask_threshold,
+        "total_scene_images": int(len(scene_image_paths)),
+        "written_masks": int(written_masks),
+        "skipped_existing": int(skipped_existing),
+        "read_errors": int(read_errors),
+        "overwrite": bool(overwrite),
+    }
+    state["predicted_scene_masks_dir"] = final_output_dir
+    state["predicted_masks_export_report"] = report
+    return report
 
 
 @torch.no_grad()

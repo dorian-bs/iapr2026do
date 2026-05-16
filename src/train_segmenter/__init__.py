@@ -2,6 +2,7 @@
 
 from .pipeline import (
     evaluate_segmenter_validation,
+    export_predicted_scene_masks,
     SegmenterPipelineConfig,
     SceneSegDataset,
     initialize_segmenter_pipeline,
@@ -13,6 +14,7 @@ from .pipeline import (
 
 __all__ = [
     "evaluate_segmenter_validation",
+    "export_predicted_scene_masks",
     "SegmenterPipelineConfig",
     "SceneSegDataset",
     "initialize_segmenter_pipeline",

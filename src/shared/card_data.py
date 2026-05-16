@@ -214,17 +214,34 @@ def load_scene_manual_samples(
     return samples, missing, skipped_labels, skipped_boxes, skipped_masks
 
 
-def derive_scene_predicted_samples(scene_train_samples: list[CardSample]) -> list[CardSample]:
-    return [
-        CardSample(
-            stage="scene_predicted",
-            label=s.label,
-            image_path=s.image_path,
-            bbox=s.bbox,
-            scene_mask_path=None,
+def derive_scene_predicted_samples(
+    scene_train_samples: list[CardSample],
+    predicted_masks_dir: Path | None = None,
+) -> list[CardSample]:
+    mask_by_stem: dict[str, Path] = {}
+    if predicted_masks_dir is not None and predicted_masks_dir.is_dir():
+        for mask_path in sorted(predicted_masks_dir.iterdir()):
+            if mask_path.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+                mask_by_stem[mask_path.stem] = mask_path
+
+    out: list[CardSample] = []
+    for s in scene_train_samples:
+        scene_mask_path = None
+        if mask_by_stem:
+            scene_mask_path = mask_by_stem.get(s.image_path.stem)
+            if scene_mask_path is None:
+                continue
+
+        out.append(
+            CardSample(
+                stage="scene_predicted",
+                label=s.label,
+                image_path=s.image_path,
+                bbox=s.bbox,
+                scene_mask_path=scene_mask_path,
+            )
         )
-        for s in scene_train_samples
-    ]
+    return out
 
 
 def read_crop_image(sample: CardSample, bbox_margin: float) -> np.ndarray:
@@ -268,20 +285,34 @@ def sample_to_crop_and_mask(
         mask_crop = np.where(mask_crop > 127, 255, 0).astype(np.uint8)
 
     elif sample.stage == "scene_predicted":
-        if predicted_scene_probs is None or sample.bbox is None:
-            raise ValueError("scene_predicted sample requires bbox and predicted_scene_probs.")
-        prob_map = predicted_scene_probs.get(str(sample.image_path.resolve()))
-        if prob_map is None:
-            raise KeyError(f"Missing predicted probability map: {sample.image_path}")
-        prob_crop = crop_with_margin(prob_map, sample.bbox, margin_fraction=bbox_margin)
-        # Cache may contain float probabilities (legacy) or pre-thresholded uint8 masks.
-        if prob_crop.dtype == np.bool_:
-            mask_crop = prob_crop.astype(np.uint8) * 255
-        elif np.issubdtype(prob_crop.dtype, np.floating):
-            mask_crop = np.where(prob_crop > mask_threshold, 255, 0).astype(np.uint8)
+        if sample.bbox is None:
+            raise ValueError("scene_predicted sample requires bbox.")
+
+        if sample.scene_mask_path is not None:
+            pred_mask = cv2.imread(str(sample.scene_mask_path), cv2.IMREAD_GRAYSCALE)
+            if pred_mask is None:
+                raise FileNotFoundError(
+                    f"Cannot read predicted scene mask: {sample.scene_mask_path}"
+                )
+            mask_crop = crop_with_margin(pred_mask, sample.bbox, margin_fraction=bbox_margin)
+            mask_crop = np.where(mask_crop > 127, 255, 0).astype(np.uint8)
         else:
-            int_threshold = int(round(float(mask_threshold) * 255.0))
-            mask_crop = np.where(prob_crop > int_threshold, 255, 0).astype(np.uint8)
+            if predicted_scene_probs is None:
+                raise ValueError(
+                    "scene_predicted sample requires predicted_scene_probs when scene_mask_path is missing."
+                )
+            prob_map = predicted_scene_probs.get(str(sample.image_path.resolve()))
+            if prob_map is None:
+                raise KeyError(f"Missing predicted probability map: {sample.image_path}")
+            prob_crop = crop_with_margin(prob_map, sample.bbox, margin_fraction=bbox_margin)
+            # Cache may contain float probabilities (legacy) or pre-thresholded uint8 masks.
+            if prob_crop.dtype == np.bool_:
+                mask_crop = prob_crop.astype(np.uint8) * 255
+            elif np.issubdtype(prob_crop.dtype, np.floating):
+                mask_crop = np.where(prob_crop > mask_threshold, 255, 0).astype(np.uint8)
+            else:
+                int_threshold = int(round(float(mask_threshold) * 255.0))
+                mask_crop = np.where(prob_crop > int_threshold, 255, 0).astype(np.uint8)
 
     else:
         raise ValueError(f"Unknown sample stage: {sample.stage}")

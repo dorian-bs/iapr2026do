@@ -9,8 +9,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_card_preview(state: dict[str, Any]) -> None:
-    """Show a grid of randomly sampled augmented single-card crops."""
+def plot_card_preview(state: dict[str, Any], one_per_card: bool = True) -> None:
+    """Show augmented single-card crops.
+
+    By default, displays one sample for each unique card label so label
+    assignment can be verified quickly.
+    """
     aug_rows = state["aug_rows"]
     if not aug_rows:
         print("No augmented cards were generated.")
@@ -19,32 +23,73 @@ def plot_card_preview(state: dict[str, Any]) -> None:
     paths = state["paths"]
     cfg = state["cfg"]
     rng = state["card_preview_rng"]
-    preview_count = min(int(cfg.preview_card_sample_count), len(aug_rows))
-    if preview_count == 0:
-        print("Preview disabled (preview_card_sample_count == 0).")
-        return
+    if one_per_card:
+        label_to_indices: dict[str, list[int]] = {}
+        for idx, row in enumerate(aug_rows):
+            label = str(row.get("card", "")).strip()
+            if not label:
+                continue
+            label_to_indices.setdefault(label, []).append(idx)
 
-    preview_indices = rng.choice(len(aug_rows), size=preview_count, replace=False)
-    cols = 4
-    rows = int(np.ceil(preview_count / cols))
-    fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3.8 * rows))
-    axes = np.array(axes).reshape(-1)
+        labels = sorted(label_to_indices.keys())
+        if not labels:
+            print("No labelled augmented cards were found in aug_rows.")
+            return
 
-    for ax, index in zip(axes, preview_indices):
-        row = aug_rows[int(index)]
-        image_path = paths.aug_cards_dir / f"{row['image_id']}.png"
-        if not image_path.is_file():
-            image_path = paths.aug_cards_dir / f"{row['image_id']}.jpg"
-        image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-        ax.imshow(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
-        ax.set_title(row["card"], fontsize=9)
-        ax.axis("off")
+        preview_indices = [
+            int(rng.choice(label_to_indices[label]))
+            for label in labels
+        ]
+        print(f"Previewing one sample per label: {len(labels)} labels")
+    else:
+        preview_count = min(int(cfg.preview_card_sample_count), len(aug_rows))
+        if preview_count == 0:
+            print("Preview disabled (preview_card_sample_count == 0).")
+            return
+        preview_indices = rng.choice(len(aug_rows), size=preview_count, replace=False).tolist()
+        print(f"Previewing random subset: {len(preview_indices)} samples")
 
-    for ax in axes[preview_count:]:
-        ax.axis("off")
+    cols = 6
+    rows_per_page = 6
+    page_size = cols * rows_per_page
 
-    plt.tight_layout()
-    plt.show()
+    for page_start in range(0, len(preview_indices), page_size):
+        page_indices = preview_indices[page_start: page_start + page_size]
+        rows = int(np.ceil(len(page_indices) / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(3.2 * cols, 3.6 * rows))
+        axes = np.array(axes).reshape(-1)
+
+        for ax, index in zip(axes, page_indices):
+            row = aug_rows[int(index)]
+            image_path = None
+            for suffix in (".png", ".jpg", ".jpeg"):
+                candidate = paths.aug_cards_dir / f"{row['image_id']}{suffix}"
+                if candidate.is_file():
+                    image_path = candidate
+                    break
+
+            if image_path is None:
+                ax.text(0.5, 0.5, "missing image", ha="center", va="center")
+                ax.set_title(str(row.get("card", "?")), fontsize=8)
+                ax.axis("off")
+                continue
+
+            image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+            if image_bgr is None:
+                ax.text(0.5, 0.5, "read error", ha="center", va="center")
+                ax.set_title(str(row.get("card", "?")), fontsize=8)
+                ax.axis("off")
+                continue
+
+            ax.imshow(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
+            ax.set_title(str(row.get("card", "?")), fontsize=8)
+            ax.axis("off")
+
+        for ax in axes[len(page_indices):]:
+            ax.axis("off")
+
+        plt.tight_layout()
+        plt.show()
 
 
 def plot_scene_preview(state: dict[str, Any]) -> None:
