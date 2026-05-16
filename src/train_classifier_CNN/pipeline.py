@@ -312,54 +312,63 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     overlap = train_scene_paths & val_scene_paths
     assert not overlap, f"Scene-level split produced {len(overlap)} overlapping image(s) — this is a bug."
 
-    scene_predicted_train_samples = derive_scene_predicted_samples(scene_train_samples)
-    scene_predicted_val_samples = derive_scene_predicted_samples(scene_val_samples)
+    stage4_enabled = int(cfg.stage_4_epochs) > 0
+    if stage4_enabled:
+        scene_predicted_train_samples = derive_scene_predicted_samples(scene_train_samples)
+        scene_predicted_val_samples = derive_scene_predicted_samples(scene_val_samples)
 
-    # ---------------- predicted-mask cache ----------------
-    scene_paths_for_pred = sorted({
-        s.image_path.resolve() for s in scene_predicted_train_samples + scene_predicted_val_samples
-    })
+        # ---------------- predicted-mask cache ----------------
+        scene_paths_for_pred = sorted({
+            s.image_path.resolve() for s in scene_predicted_train_samples + scene_predicted_val_samples
+        })
 
-    if cfg.max_predicted_cache_images is not None:
-        capped_pred_paths = _deterministic_path_subset(
+        if cfg.max_predicted_cache_images is not None:
+            capped_pred_paths = _deterministic_path_subset(
+                scene_paths_for_pred,
+                max_count=int(cfg.max_predicted_cache_images),
+                seed=cfg.seed + 17_171,
+            )
+            capped_pred_path_set = {p.resolve() for p in capped_pred_paths}
+            if len(capped_pred_paths) < len(scene_paths_for_pred):
+                before_pred_train = len(scene_predicted_train_samples)
+                before_pred_val = len(scene_predicted_val_samples)
+                scene_predicted_train_samples = [
+                    s for s in scene_predicted_train_samples if s.image_path.resolve() in capped_pred_path_set
+                ]
+                scene_predicted_val_samples = [
+                    s for s in scene_predicted_val_samples if s.image_path.resolve() in capped_pred_path_set
+                ]
+                scene_paths_for_pred = sorted(capped_pred_paths)
+                print(
+                    "[cap] predicted-mask cache limited to "
+                    f"{len(scene_paths_for_pred)} scenes "
+                    f"(max_predicted_cache_images={cfg.max_predicted_cache_images}); "
+                    f"scene-pred train: {before_pred_train} -> {len(scene_predicted_train_samples)}, "
+                    f"scene-pred val: {before_pred_val} -> {len(scene_predicted_val_samples)}"
+                )
+            else:
+                print(
+                    "[cap] max_predicted_cache_images="
+                    f"{cfg.max_predicted_cache_images} (no-op: dataset has fewer predicted scenes)"
+                )
+
+        cache_threshold = cfg.mask_threshold if cfg.predicted_cache_binary_masks else None
+        predicted_scene_probs = build_scene_probability_cache(
             scene_paths_for_pred,
-            max_count=int(cfg.max_predicted_cache_images),
-            seed=cfg.seed + 17_171,
+            scene_segmenter_path,
+            device,
+            target_size=cfg.segmenter_img_size,
+            mask_threshold=cache_threshold,
         )
-        capped_pred_path_set = {p.resolve() for p in capped_pred_paths}
-        if len(capped_pred_paths) < len(scene_paths_for_pred):
-            before_pred_train = len(scene_predicted_train_samples)
-            before_pred_val = len(scene_predicted_val_samples)
-            scene_predicted_train_samples = [
-                s for s in scene_predicted_train_samples if s.image_path.resolve() in capped_pred_path_set
-            ]
-            scene_predicted_val_samples = [
-                s for s in scene_predicted_val_samples if s.image_path.resolve() in capped_pred_path_set
-            ]
-            scene_paths_for_pred = sorted(capped_pred_paths)
-            print(
-                "[cap] predicted-mask cache limited to "
-                f"{len(scene_paths_for_pred)} scenes "
-                f"(max_predicted_cache_images={cfg.max_predicted_cache_images}); "
-                f"scene-pred train: {before_pred_train} -> {len(scene_predicted_train_samples)}, "
-                f"scene-pred val: {before_pred_val} -> {len(scene_predicted_val_samples)}"
-            )
-        else:
-            print(
-                "[cap] max_predicted_cache_images="
-                f"{cfg.max_predicted_cache_images} (no-op: dataset has fewer predicted scenes)"
-            )
-
-    cache_threshold = cfg.mask_threshold if cfg.predicted_cache_binary_masks else None
-    predicted_scene_probs = build_scene_probability_cache(
-        scene_paths_for_pred,
-        scene_segmenter_path,
-        device,
-        target_size=cfg.segmenter_img_size,
-        mask_threshold=cache_threshold,
-    )
-    predicted_cache_bytes = int(sum(arr.nbytes for arr in predicted_scene_probs.values()))
-    predicted_cache_mode = "uint8_binary_masks" if cfg.predicted_cache_binary_masks else "float32_probabilities"
+        predicted_cache_bytes = int(sum(arr.nbytes for arr in predicted_scene_probs.values()))
+        predicted_cache_mode = "uint8_binary_masks" if cfg.predicted_cache_binary_masks else "float32_probabilities"
+    else:
+        scene_predicted_train_samples = []
+        scene_predicted_val_samples = []
+        predicted_scene_probs = {}
+        predicted_cache_bytes = 0
+        predicted_cache_mode = "disabled_stage4_epochs_zero"
+        print("[skip] Stage 4 disabled (stage_4_epochs <= 0): predicted-mask cache not built.")
 
     # ---------------- per-stage sample budgets ----------------
     ref_per_epoch = _stage_samples_per_epoch(len(reference_samples), "reference", batch_size, device, cfg)
@@ -403,8 +412,10 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
         balanced=cfg.balanced_sampling, samples_per_epoch=scene_manual_per_epoch, **common,
     )
     train_loader_predicted, _ = make_loader(
-        samples=scene_predicted_train_samples, shuffle=True, augment=True,
-        predicted_scene_probs=predicted_scene_probs,
+        samples=scene_predicted_train_samples,
+        shuffle=bool(stage4_enabled and len(scene_predicted_train_samples) > 0),
+        augment=True,
+        predicted_scene_probs=(predicted_scene_probs if stage4_enabled else None),
         balanced=cfg.balanced_sampling, samples_per_epoch=scene_pred_per_epoch, **common,
     )
 
@@ -416,7 +427,7 @@ def initialize_training_pipeline(config: TrainPipelineConfig | None = None) -> d
     )
     val_loader_predicted, _ = make_loader(
         samples=scene_predicted_val_samples, shuffle=False, augment=False,
-        predicted_scene_probs=predicted_scene_probs, **common,
+        predicted_scene_probs=(predicted_scene_probs if stage4_enabled else None), **common,
     )
 
     # ---------------- model ----------------
@@ -1193,16 +1204,39 @@ def run_validation_diagnostics(state: dict[str, Any]) -> dict[str, Any]:
     device: torch.device = state["device"]
     label_encoder: LabelEncoder = state["label_encoder"]
     cfg: TrainPipelineConfig = state["config"]
+    has_predicted_validation = len(state.get("scene_predicted_val_samples", [])) > 0
 
     val_metrics, val_true_idx, val_pred_idx = _evaluate_one_epoch(
         model, val_loader, ce_loss, use_amp, device, return_predictions=True,
     )
-    val_pred_metrics, val_pred_true_idx, val_pred_pred_idx = _evaluate_one_epoch(
-        model, val_loader_predicted, ce_loss, use_amp, device, return_predictions=True,
-    )
+    if has_predicted_validation:
+        val_pred_metrics, val_pred_true_idx, val_pred_pred_idx = _evaluate_one_epoch(
+            model, val_loader_predicted, ce_loss, use_amp, device, return_predictions=True,
+        )
+    else:
+        val_pred_metrics = {
+            "loss": float("nan"),
+            "cls_acc": float("nan"),
+            "top3_acc": float("nan"),
+            "mean_confidence": float("nan"),
+            "macro_precision": float("nan"),
+            "macro_recall": float("nan"),
+            "macro_f1": float("nan"),
+            "weighted_precision": float("nan"),
+            "weighted_recall": float("nan"),
+            "weighted_f1": float("nan"),
+            "balanced_acc": float("nan"),
+            "skipped_non_finite_batches": 0.0,
+        }
+        val_pred_true_idx = np.asarray([], dtype=np.int64)
+        val_pred_pred_idx = np.asarray([], dtype=np.int64)
 
     selection_manual = _selection_score_from_metrics(val_metrics, cfg)
-    selection_predicted = _selection_score_from_metrics(val_pred_metrics, cfg)
+    selection_predicted = (
+        _selection_score_from_metrics(val_pred_metrics, cfg)
+        if has_predicted_validation
+        else float("nan")
+    )
 
     n_classes = len(label_encoder.classes_)
     valid_mask = (val_true_idx >= 0) & (val_true_idx < n_classes) & (val_pred_idx >= 0) & (val_pred_idx < n_classes)
@@ -1212,27 +1246,32 @@ def run_validation_diagnostics(state: dict[str, Any]) -> dict[str, Any]:
         val_true_idx = val_true_idx[valid_mask]
         val_pred_idx = val_pred_idx[valid_mask]
 
-    valid_pred_mask = (
-        (val_pred_true_idx >= 0)
-        & (val_pred_true_idx < n_classes)
-        & (val_pred_pred_idx >= 0)
-        & (val_pred_pred_idx < n_classes)
-    )
-    invalid_pred = int(np.count_nonzero(~valid_pred_mask))
-    if invalid_pred > 0:
-        print(f"[warning] Dropping {invalid_pred} invalid predicted-mask validation rows.")
-        val_pred_true_idx = val_pred_true_idx[valid_pred_mask]
-        val_pred_pred_idx = val_pred_pred_idx[valid_pred_mask]
+    if has_predicted_validation:
+        valid_pred_mask = (
+            (val_pred_true_idx >= 0)
+            & (val_pred_true_idx < n_classes)
+            & (val_pred_pred_idx >= 0)
+            & (val_pred_pred_idx < n_classes)
+        )
+        invalid_pred = int(np.count_nonzero(~valid_pred_mask))
+        if invalid_pred > 0:
+            print(f"[warning] Dropping {invalid_pred} invalid predicted-mask validation rows.")
+            val_pred_true_idx = val_pred_true_idx[valid_pred_mask]
+            val_pred_pred_idx = val_pred_pred_idx[valid_pred_mask]
 
     if val_true_idx.size == 0:
         raise RuntimeError("No valid validation predictions available.")
-    if val_pred_true_idx.size == 0:
+    if has_predicted_validation and val_pred_true_idx.size == 0:
         raise RuntimeError("No valid predicted-mask validation predictions available.")
 
     true_labels = label_encoder.inverse_transform(val_true_idx)
     pred_labels = label_encoder.inverse_transform(val_pred_idx)
-    true_labels_pred = label_encoder.inverse_transform(val_pred_true_idx)
-    pred_labels_pred = label_encoder.inverse_transform(val_pred_pred_idx)
+    if has_predicted_validation:
+        true_labels_pred = label_encoder.inverse_transform(val_pred_true_idx)
+        pred_labels_pred = label_encoder.inverse_transform(val_pred_pred_idx)
+    else:
+        true_labels_pred = np.asarray([], dtype=object)
+        pred_labels_pred = np.asarray([], dtype=object)
 
     print(
         "Validation (manual masks) | "
@@ -1244,28 +1283,39 @@ def run_validation_diagnostics(state: dict[str, Any]) -> dict[str, Any]:
     )
     print(classification_report(true_labels, pred_labels, zero_division=0))
 
-    print(
-        "Validation (pred masks)   | "
-        f"acc={val_pred_metrics['cls_acc'] * 100:.2f}% "
-        f"macro_f1={val_pred_metrics['macro_f1']:.3f} "
-        f"balanced_acc={val_pred_metrics['balanced_acc']:.3f} "
-        f"top3={val_pred_metrics['top3_acc']:.3f} "
-        f"selection={selection_predicted:.4f}"
-    )
-    print(classification_report(true_labels_pred, pred_labels_pred, zero_division=0))
+    if has_predicted_validation:
+        print(
+            "Validation (pred masks)   | "
+            f"acc={val_pred_metrics['cls_acc'] * 100:.2f}% "
+            f"macro_f1={val_pred_metrics['macro_f1']:.3f} "
+            f"balanced_acc={val_pred_metrics['balanced_acc']:.3f} "
+            f"top3={val_pred_metrics['top3_acc']:.3f} "
+            f"selection={selection_predicted:.4f}"
+        )
+        print(classification_report(true_labels_pred, pred_labels_pred, zero_division=0))
+    else:
+        print("Validation (pred masks)   | skipped (stage 4 disabled or no predicted samples)")
 
     fig_size = max(8, 0.30 * len(label_encoder.classes_))
-    fig, axes = plt.subplots(1, 2, figsize=(2 * fig_size, fig_size))
-    ConfusionMatrixDisplay.from_predictions(
-        true_labels, pred_labels, labels=label_encoder.classes_,
-        xticks_rotation=90, colorbar=False, ax=axes[0],
-    )
-    axes[0].set_title(f"Manual-mask val acc: {val_metrics['cls_acc'] * 100:.1f}%")
-    ConfusionMatrixDisplay.from_predictions(
-        true_labels_pred, pred_labels_pred, labels=label_encoder.classes_,
-        xticks_rotation=90, colorbar=False, ax=axes[1],
-    )
-    axes[1].set_title(f"Pred-mask val acc: {val_pred_metrics['cls_acc'] * 100:.1f}%")
+    if has_predicted_validation:
+        fig, axes = plt.subplots(1, 2, figsize=(2 * fig_size, fig_size))
+        ConfusionMatrixDisplay.from_predictions(
+            true_labels, pred_labels, labels=label_encoder.classes_,
+            xticks_rotation=90, colorbar=False, ax=axes[0],
+        )
+        axes[0].set_title(f"Manual-mask val acc: {val_metrics['cls_acc'] * 100:.1f}%")
+        ConfusionMatrixDisplay.from_predictions(
+            true_labels_pred, pred_labels_pred, labels=label_encoder.classes_,
+            xticks_rotation=90, colorbar=False, ax=axes[1],
+        )
+        axes[1].set_title(f"Pred-mask val acc: {val_pred_metrics['cls_acc'] * 100:.1f}%")
+    else:
+        fig, ax = plt.subplots(1, 1, figsize=(fig_size, fig_size))
+        ConfusionMatrixDisplay.from_predictions(
+            true_labels, pred_labels, labels=label_encoder.classes_,
+            xticks_rotation=90, colorbar=False, ax=ax,
+        )
+        ax.set_title(f"Manual-mask val acc: {val_metrics['cls_acc'] * 100:.1f}%")
     plt.tight_layout()
     plt.show()
 
