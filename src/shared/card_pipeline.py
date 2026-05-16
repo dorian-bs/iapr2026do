@@ -180,11 +180,24 @@ def nms_boxes(
     boxes: list[tuple[int, int, int, int]],
     iou_threshold: float = 0.35,
 ) -> list[tuple[int, int, int, int]]:
-    boxes = sorted(boxes, key=lambda box: (box[2] - box[0]) * (box[3] - box[1]), reverse=True)
-    kept: list[tuple[int, int, int, int]] = []
-    for box in boxes:
-        if all(box_iou(box, kept_box) < iou_threshold for kept_box in kept):
-            kept.append(box)
+    kept_indices = nms_box_indices(boxes, iou_threshold=iou_threshold)
+    return [boxes[i] for i in kept_indices]
+
+
+def nms_box_indices(
+    boxes: list[tuple[int, int, int, int]],
+    iou_threshold: float = 0.35,
+) -> list[int]:
+    order = sorted(
+        range(len(boxes)),
+        key=lambda i: (boxes[i][2] - boxes[i][0]) * (boxes[i][3] - boxes[i][1]),
+        reverse=True,
+    )
+    kept: list[int] = []
+    for idx in order:
+        box = boxes[idx]
+        if all(box_iou(box, boxes[kept_idx]) < iou_threshold for kept_idx in kept):
+            kept.append(idx)
     return kept
 
 
@@ -274,6 +287,67 @@ def split_touching_component(
     return [component]
 
 
+def grow_instance_masks_without_merging(
+    instance_masks: list[np.ndarray],
+    growth_px: int,
+) -> list[np.ndarray]:
+    """Grow instance masks while preserving separation on contested pixels.
+
+    Expansion is run as a synchronized, one-pixel-at-a-time front propagation.
+    If multiple instances claim the same pixel on an iteration, that pixel is
+    left empty to keep a thin separator instead of merging blobs.
+    """
+    if not instance_masks:
+        return []
+
+    growth_px = max(0, int(growth_px))
+    base_masks = [(m > 0).astype(np.uint8) for m in instance_masks]
+    union = np.zeros_like(base_masks[0], dtype=np.uint8)
+    for mask in base_masks:
+        union = np.maximum(union, mask)
+
+    if growth_px <= 0:
+        return base_masks
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    allowed = cv2.dilate(union, kernel, iterations=growth_px)
+
+    labels = np.zeros_like(union, dtype=np.int32)
+    for idx, mask in enumerate(base_masks, start=1):
+        seed = (mask > 0) & (labels == 0)
+        labels[seed] = idx
+
+    for _ in range(growth_px):
+        unassigned = (allowed > 0) & (labels == 0)
+        if not np.any(unassigned):
+            break
+
+        claim_count = np.zeros_like(union, dtype=np.uint8)
+        claim_label = np.zeros_like(labels, dtype=np.int32)
+
+        for idx in range(1, len(base_masks) + 1):
+            region = (labels == idx).astype(np.uint8)
+            if int(region.sum()) == 0:
+                continue
+            dilated = cv2.dilate(region, kernel, iterations=1) > 0
+            claim = dilated & unassigned
+            if not np.any(claim):
+                continue
+            claim_count[claim] += 1
+            claim_label[claim] = idx
+
+        unique_claim = claim_count == 1
+        if not np.any(unique_claim):
+            break
+        labels[unique_claim] = claim_label[unique_claim]
+
+    grown_masks = [
+        (labels == idx).astype(np.uint8)
+        for idx in range(1, len(base_masks) + 1)
+    ]
+    return grown_masks
+
+
 def remove_small_components(mask: np.ndarray, min_area: int) -> np.ndarray:
     """Keep only connected components whose area is at least `min_area` pixels."""
     min_area = int(min_area)
@@ -296,7 +370,9 @@ def boxes_from_probability(
     min_aspect: float = 0.12,
     max_aspect: float = 5.0,
     min_component_area: int | None = None,
-) -> tuple[list[tuple[int, int, int, int]], np.ndarray]:
+    instance_mask_growth_px: int = 0,
+    return_instance_masks: bool = False,
+) -> tuple[list[tuple[int, int, int, int]], np.ndarray] | tuple[list[tuple[int, int, int, int]], np.ndarray, list[np.ndarray]]:
     h, w = probability.shape[:2]
     mask = (probability > threshold).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
@@ -309,27 +385,57 @@ def boxes_from_probability(
 
     n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
     min_split_area = max(220, int(0.55 * min_area))
-    boxes: list[tuple[int, int, int, int]] = []
+    candidate_boxes: list[tuple[int, int, int, int]] = []
+    candidate_masks_local: list[tuple[np.ndarray, int, int]] = []
+    growth_px = max(0, int(instance_mask_growth_px))
 
     for label_idx in range(1, n_labels):
         component_area = int(stats[label_idx, cv2.CC_STAT_AREA])
         if component_area < min_area:
             continue
 
-        component_mask = (labels == label_idx).astype(np.uint8)
-        for part_mask in split_touching_component(component_mask, min_split_area):
+        cx = int(stats[label_idx, cv2.CC_STAT_LEFT])
+        cy = int(stats[label_idx, cv2.CC_STAT_TOP])
+        cw = int(stats[label_idx, cv2.CC_STAT_WIDTH])
+        ch = int(stats[label_idx, cv2.CC_STAT_HEIGHT])
+        pad = max(4, growth_px + 1)
+        x0 = max(0, cx - pad)
+        y0 = max(0, cy - pad)
+        x1 = min(w, cx + cw + pad)
+        y1 = min(h, cy + ch + pad)
+
+        component_mask = (labels[y0:y1, x0:x1] == label_idx).astype(np.uint8)
+        part_masks = split_touching_component(component_mask, min_split_area)
+        part_masks = grow_instance_masks_without_merging(part_masks, growth_px=growth_px)
+
+        for part_mask in part_masks:
             ys, xs = np.where(part_mask > 0)
             if ys.size == 0:
                 continue
 
-            x0, x1 = int(xs.min()), int(xs.max() + 1)
-            y0, y1 = int(ys.min()), int(ys.max() + 1)
-            bw = x1 - x0
-            bh = y1 - y0
+            bx0_local, bx1_local = int(xs.min()), int(xs.max() + 1)
+            by0_local, by1_local = int(ys.min()), int(ys.max() + 1)
+            box = (x0 + bx0_local, y0 + by0_local, x0 + bx1_local, y0 + by1_local)
+
+            bw = box[2] - box[0]
+            bh = box[3] - box[1]
             area = int(np.count_nonzero(part_mask))
             aspect = bw / max(1, bh)
 
             if area >= min_split_area and min_aspect <= aspect <= max_aspect:
-                boxes.append((x0, y0, x1, y1))
+                candidate_boxes.append(box)
+                candidate_masks_local.append((part_mask.astype(np.uint8), x0, y0))
 
-    return nms_boxes(boxes)[:max_components], mask
+    kept_indices = nms_box_indices(candidate_boxes)[:max_components]
+    boxes = [candidate_boxes[i] for i in kept_indices]
+
+    if return_instance_masks:
+        instance_masks: list[np.ndarray] = []
+        for i in kept_indices:
+            local_mask, ox, oy = candidate_masks_local[i]
+            full_mask = np.zeros((h, w), dtype=np.uint8)
+            hh, ww = local_mask.shape[:2]
+            full_mask[oy:oy + hh, ox:ox + ww] = local_mask
+            instance_masks.append(full_mask)
+        return boxes, mask, instance_masks
+    return boxes, mask

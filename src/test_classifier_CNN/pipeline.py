@@ -50,6 +50,7 @@ class TestPipelineConfig:
     segmenter_img_size: int = 256
     card_mask_threshold: float = 0.50
     segmenter_min_component_area: int | None = None
+    instance_mask_growth_px: int = 5
 
     eval_threshold: float = 0.50
 
@@ -172,7 +173,8 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
     print(f"Classifier architecture: {classifier_arch} (stem_width={classifier_stem_width})")
     print(
         f"Card image size: {card_img_size} | mask threshold: {card_mask_threshold} | "
-        f"segmenter min component area: {cfg.segmenter_min_component_area} | input channels: {input_channels}"
+        f"segmenter min component area: {cfg.segmenter_min_component_area} | "
+        f"instance mask growth: {cfg.instance_mask_growth_px}px | input channels: {input_channels}"
     )
     print(f"Device: {device}")
 
@@ -227,6 +229,7 @@ def initialize_test_pipeline(config: TestPipelineConfig | None = None) -> dict[s
         "segmenter_min_component_area": (
             None if cfg.segmenter_min_component_area is None else int(cfg.segmenter_min_component_area)
         ),
+        "instance_mask_growth_px": max(0, int(cfg.instance_mask_growth_px)),
         "card_mask_threshold": card_mask_threshold,
         "card_norm_mean": card_norm_mean,
         "card_norm_std": card_norm_std,
@@ -253,16 +256,20 @@ def _predict_game_state(
     probability = segment_scene_probability(
         image_bgr, state["segmenter"], state["device"], target_size=state["segmenter_img_size"],
     )
-    boxes, mask = boxes_from_probability(
+    boxes, mask, instance_masks = boxes_from_probability(
         probability,
         threshold=threshold,
         min_component_area=state.get("segmenter_min_component_area"),
+        instance_mask_growth_px=state.get("instance_mask_growth_px", 0),
+        return_instance_masks=True,
     )
+    if len(instance_masks) != len(boxes):
+        raise RuntimeError("Internal error: detected boxes and instance masks are misaligned.")
 
     pred_rows: list[dict[str, Any]] = []
-    for box_index, box in enumerate(boxes):
+    for box_index, (box, instance_mask) in enumerate(zip(boxes, instance_masks)):
         crop_bgr = crop_with_margin(image_bgr, box)
-        crop_mask = crop_with_margin((mask * 255).astype(np.uint8), box)
+        crop_mask = crop_with_margin((instance_mask * 255).astype(np.uint8), box)
         if crop_bgr.size == 0 or crop_mask.size == 0:
             continue
 

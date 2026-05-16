@@ -100,9 +100,9 @@ class TrainPipelineConfig:
 
     reference_target_gpu_mps: int = 1536
     reference_target_cpu: int = 512
-    augmented_target_gpu_mps: int = 4096
+    augmented_target_gpu_mps: int = 8192
     augmented_target_cpu: int = 1536
-    scene_target_gpu_mps: int = 4096
+    scene_target_gpu_mps: int = 8192
     scene_target_cpu: int = 1536
 
     scene_finetune_freeze_bn_stats: bool = True
