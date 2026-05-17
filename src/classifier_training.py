@@ -39,10 +39,10 @@ class TrainPipelineConfig:
     val_split: float = 0.20
 
     stage_1_epochs: int = 2
-    stage_2_epochs: int = 2
+    stage_2_epochs: int = 90
 
     stage_1_lr: float = 1e-3
-    stage_2_lr: float = 3e-4
+    stage_2_lr: float = 4e-4
 
     weight_decay: float = 1e-4
     label_smoothing: float = 0.05
