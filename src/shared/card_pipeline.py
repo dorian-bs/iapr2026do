@@ -1,13 +1,8 @@
 """Shared image-pipeline primitives: normalization, letterboxing, masking,
 geometry, and scene-segmenter inference.
-
-These helpers are used identically by training and inference paths. Keeping
-them in one module prevents the train/test drift that previously existed
-(e.g. PIL+TF.normalize on one side, cv2+manual normalization on the other).
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Iterable
 
 import cv2
@@ -22,19 +17,6 @@ IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
-def find_workspace_root(markers: Iterable[str] = ("project/training_data", "data")) -> Path:
-    """Walk parents until all `markers` exist as siblings."""
-    candidate = Path.cwd().resolve()
-    markers = tuple(markers)
-    while not all((candidate / marker).exists() for marker in markers):
-        if candidate.parent == candidate:
-            raise FileNotFoundError(
-                f"Could not locate workspace root containing {markers}."
-            )
-        candidate = candidate.parent
-    return candidate
-
-
 def crop_with_margin(arr: np.ndarray, bbox: tuple[int, int, int, int], margin_fraction: float = 0.08) -> np.ndarray:
     x0, y0, x1, y1 = map(int, bbox)
     h, w = arr.shape[:2]
@@ -47,15 +29,6 @@ def crop_with_margin(arr: np.ndarray, bbox: tuple[int, int, int, int], margin_fr
     y1 = min(h, y1 + margin)
     return arr[y0:y1, x0:x1]
 
-
-def is_reasonable_scene_bbox(bbox: tuple[int, int, int, int], min_side: int = 28, max_aspect: float = 4.5) -> bool:
-    x0, y0, x1, y1 = map(int, bbox)
-    bw = x1 - x0
-    bh = y1 - y0
-    if bw < min_side or bh < min_side:
-        return False
-    aspect = max(bw / max(1, bh), bh / max(1, bw))
-    return aspect <= max_aspect
 
 
 def letterbox_image_and_mask(
@@ -176,14 +149,6 @@ def box_iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float
     return inter / max(1, area_a + area_b - inter)
 
 
-def nms_boxes(
-    boxes: list[tuple[int, int, int, int]],
-    iou_threshold: float = 0.35,
-) -> list[tuple[int, int, int, int]]:
-    kept_indices = nms_box_indices(boxes, iou_threshold=iou_threshold)
-    return [boxes[i] for i in kept_indices]
-
-
 def nms_box_indices(
     boxes: list[tuple[int, int, int, int]],
     iou_threshold: float = 0.35,
@@ -232,59 +197,6 @@ def assign_region(
 
 def format_cards(cards: list[str]) -> str:
     return "EMPTY" if len(cards) == 0 else ";".join(cards)
-
-
-def split_touching_component(
-    component_mask: np.ndarray,
-    min_area: int,
-    max_instances: int = 8,
-) -> list[np.ndarray]:
-    """Try erosion-based seeds to split a single connected blob into multiple
-    card-shaped masks (handles touching/overlapping cards in scenes)."""
-    component = (component_mask > 0).astype(np.uint8)
-    component_area = int(np.count_nonzero(component))
-    if component_area < 2 * min_area:
-        return [component]
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    seed_min_area = max(25, min_area // 5)
-
-    for erode_iters in (1, 2, 3, 4):
-        eroded = cv2.erode(component, kernel, iterations=erode_iters)
-        n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(eroded, connectivity=8)
-        if n_labels <= 2:
-            continue
-
-        candidate_parts: list[np.ndarray] = []
-        for label_idx in range(1, n_labels):
-            seed_area = int(stats[label_idx, cv2.CC_STAT_AREA])
-            if seed_area < seed_min_area:
-                continue
-            seed = (labels == label_idx).astype(np.uint8)
-            grown = cv2.dilate(seed, kernel, iterations=erode_iters)
-            grown = ((grown > 0) & (component > 0)).astype(np.uint8)
-            if int(np.count_nonzero(grown)) >= min_area:
-                candidate_parts.append(grown)
-
-        if len(candidate_parts) < 2:
-            continue
-
-        candidate_parts.sort(key=lambda part: int(np.count_nonzero(part)), reverse=True)
-        accepted_parts: list[np.ndarray] = []
-        occupied = np.zeros_like(component, dtype=np.uint8)
-
-        for part in candidate_parts:
-            unique = ((part > 0) & (occupied == 0)).astype(np.uint8)
-            if int(np.count_nonzero(unique)) >= min_area:
-                accepted_parts.append(unique)
-                occupied[unique > 0] = 1
-            if len(accepted_parts) >= max_instances:
-                break
-
-        if len(accepted_parts) >= 2:
-            return accepted_parts
-
-    return [component]
 
 
 def grow_instance_masks_without_merging(
@@ -405,8 +317,7 @@ def boxes_from_probability(
         y1 = min(h, cy + ch + pad)
 
         component_mask = (labels[y0:y1, x0:x1] == label_idx).astype(np.uint8)
-        part_masks = split_touching_component(component_mask, min_split_area)
-        part_masks = grow_instance_masks_without_merging(part_masks, growth_px=growth_px)
+        part_masks = grow_instance_masks_without_merging([component_mask], growth_px=growth_px)
 
         for part_mask in part_masks:
             ys, xs = np.where(part_mask > 0)

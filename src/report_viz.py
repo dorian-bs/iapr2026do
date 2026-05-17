@@ -101,7 +101,7 @@ def plot_pipeline_stages(
     plt.show()
 
 
-def plot_region_layout(image_w: int = 1000, image_h: int = 1000) -> None:
+def plot_region_layout(image_w: int = 3000, image_h: int = 2000) -> None:
     """Schematic of the fixed player geometry (R6).
 
     Useful in the report to motivate the `assign_region` heuristic before

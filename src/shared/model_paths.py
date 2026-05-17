@@ -1,11 +1,11 @@
 """Helpers to resolve active model artifacts from folder-based layouts.
 
 Layout conventions:
-  project/models/segmenter/used/        -> exactly one active checkpoint file
-  project/models/segmenter/backup/      -> storage only
-  project/models/card_classifier_cnn/used/<bundle_dir>/
+  models/segmenter/used/        -> exactly one active checkpoint file
+  models/segmenter/backup/      -> storage only
+  models/card_classifier_cnn/used/<bundle_dir>/
                                         -> exactly one active bundle directory
-  project/models/card_classifier_cnn/backup/<bundle_dir>/
+  models/card_classifier_cnn/backup/<bundle_dir>/
                                         -> storage only
 """
 from __future__ import annotations
@@ -83,13 +83,6 @@ def resolve_segmenter_checkpoint(models_dir: Path) -> Path:
         raise
 
 
-def get_classifier_output_bundle_dir(models_dir: Path, bundle_name: str = "latest") -> Path:
-    layout = ensure_model_layout_dirs(models_dir)
-    bundle_dir = layout["classifier_used"] / bundle_name
-    bundle_dir.mkdir(parents=True, exist_ok=True)
-    return bundle_dir
-
-
 def resolve_classifier_bundle(models_dir: Path) -> dict[str, Path | None]:
     layout = ensure_model_layout_dirs(models_dir)
     used_root = layout["classifier_used"]
@@ -128,20 +121,7 @@ def resolve_classifier_bundle(models_dir: Path) -> dict[str, Path | None]:
             "config_path": config_path,
         }
 
-    # Backward compatibility with the previous flat layout.
-    legacy_root = layout["classifier_root"]
-    legacy_model = legacy_root / "card_classifier_masked_resnet18_do.pth"
-    legacy_classes = legacy_root / "card_classifier_masked_resnet18_classes_do.npy"
-    legacy_config = legacy_root / "card_classifier_masked_resnet18_config_do.json"
-    if legacy_model.is_file() and legacy_classes.is_file():
-        return {
-            "bundle_dir": legacy_root,
-            "model_path": legacy_model,
-            "classes_path": legacy_classes,
-            "config_path": legacy_config if legacy_config.is_file() else None,
-        }
-
     raise FileNotFoundError(
         "No active classifier bundle found. Expected either one folder under "
-        f"{used_root} or legacy files under {legacy_root}."
+        f"{used_root}."
     )
