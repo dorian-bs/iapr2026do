@@ -23,6 +23,7 @@ import torch.nn as nn
 from matplotlib.patches import Rectangle
 
 from src.shared.card_models import SceneUNetSmall, assert_param_cap, build_card_classifier
+from src.shared.active_player import detect_active_player
 from src.shared.model_paths import resolve_classifier_bundle, resolve_segmenter_checkpoint
 from src.shared.card_pipeline import (
     IMAGENET_MEAN,
@@ -502,7 +503,13 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
         if image_bgr is None:
             continue
 
+        # Run pipeline predictions
         pred_summary, pred_rows, *_ = _predict_game_state(image_bgr, image_id_local, eval_threshold, state)
+        
+        # Run active player detection from active_player.py
+        pred_active_player = detect_active_player(image_bgr)
+        pred_summary["active_player"] = pred_active_player
+
         true_summary = {
             "image_id": image_id_local,
             "center_card": str(row["center_card"]).strip(),
@@ -518,7 +525,10 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
                     _parse_cards_field(true_summary[f"player_{i}_cards"]))
             for i in (1, 2, 3, 4)
         ]
+        
         center_acc = float(pred_summary["center_card"] == true_summary["center_card"])
+        active_player_acc = float(pred_summary["active_player"] == true_summary["active_player"])
+        
         image_score = float(np.mean([center_acc] + f1s))
         true_total_cards, pred_total_cards, count_diff, abs_count_diff, region_abs_diff, count_quality = (
             _segmenter_card_count_metrics(pred_rows, true_summary)
@@ -532,6 +542,7 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
             "true_summary": true_summary,
             "pred_rows": pred_rows,
             "center_acc": center_acc,
+            "active_player_acc": active_player_acc,
             "p1_f1": f1s[0], "p2_f1": f1s[1], "p3_f1": f1s[2], "p4_f1": f1s[3],
             "image_score": image_score,
             "image_score_strict": image_score_strict,
@@ -544,12 +555,13 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
         })
 
         if row_index % 25 == 0 or row_index == len(gt_rows):
-            print(f"  processed {row_index}/{len(gt_rows)}")
+            print(f"   processed {row_index}/{len(gt_rows)}")
 
     if not results:
         raise RuntimeError("Benchmark could not process any image.")
 
-    center_acc = float(np.mean([r["center_acc"] for r in results]))
+    center_acc_val = float(np.mean([r["center_acc"] for r in results]))
+    active_player_acc_val = float(np.mean([r["active_player_acc"] for r in results]))
     p_means = [float(np.mean([r[f"p{i}_f1"] for r in results])) for i in (1, 2, 3, 4)]
     macro_f1 = float(np.mean(p_means))
     overall = float(np.mean([r["image_score"] for r in results]))
@@ -562,29 +574,29 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
     segmenter_count_quality = float(np.mean([r["segmenter_count_quality"] for r in results]))
 
     print("\nBenchmark summary (masked classifier on original labeled data):")
-    print(f"  Center-card accuracy: {center_acc * 100:.2f}%")
-    print(f"  Player F1: p1={p_means[0]:.3f}, p2={p_means[1]:.3f}, p3={p_means[2]:.3f}, p4={p_means[3]:.3f}")
-    print(f"  Macro player F1: {macro_f1:.3f}")
-    print(f"  Overall image score:  {overall:.3f}")
-    print(f"  Overall strict score: {overall_strict:.3f} (includes segmenter count-variation quality)")
-    print(f"  Segmenter avg |pred-true| cards/image: {avg_abs_card_count_diff:.3f}")
-    print(f"  Segmenter avg (pred-true) cards/image: {avg_signed_card_count_diff:.3f}")
-    print(f"  Segmenter avg region variation/image:  {avg_region_abs_card_count_diff:.3f}")
-    print(f"  Segmenter total cards: pred={total_pred_cards}, true={total_true_cards}")
-    print(f"  Segmenter count-quality score: {segmenter_count_quality:.3f}")
-    print("  Note: active_player is not scored yet (not predicted by this pipeline).")
+    print(f"   Center-card accuracy: {center_acc_val * 100:.2f}%")
+    print(f"   Active player accuracy: {active_player_acc_val * 100:.2f}%")
+    print(f"   Player F1: p1={p_means[0]:.3f}, p2={p_means[1]:.3f}, p3={p_means[2]:.3f}, p4={p_means[3]:.3f}")
+    print(f"   Macro player F1: {macro_f1:.3f}")
+    print(f"   Overall image score:  {overall:.3f}")
+    print(f"   Overall strict score: {overall_strict:.3f} (includes segmenter count-variation quality)")
+    print(f"   Segmenter avg |pred-true| cards/image: {avg_abs_card_count_diff:.3f}")
+    print(f"   Segmenter avg (pred-true) cards/image: {avg_signed_card_count_diff:.3f}")
+    print(f"   Segmenter avg region variation/image:  {avg_region_abs_card_count_diff:.3f}")
+    print(f"   Segmenter total cards: pred={total_pred_cards}, true={total_true_cards}")
+    print(f"   Segmenter count-quality score: {segmenter_count_quality:.3f}")
 
     metric_names = [
-        "center_acc", "p1_f1", "p2_f1", "p3_f1", "p4_f1", "macro_f1",
+        "center_acc", "active_acc", "p1_f1", "p2_f1", "p3_f1", "p4_f1", "macro_f1",
         "seg_count_quality", "overall", "overall_strict",
     ]
-    metric_values = [center_acc] + p_means + [macro_f1, segmenter_count_quality, overall, overall_strict]
+    metric_values = [center_acc_val, active_player_acc_val] + p_means + [macro_f1, segmenter_count_quality, overall, overall_strict]
     image_scores = [r["image_score"] for r in results]
     bin_count = min(24, max(8, int(np.sqrt(len(image_scores)))))
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 5))
     axes[0].bar(metric_names, metric_values,
-                color=["#4e79a7", "#59a14f", "#59a14f", "#59a14f", "#59a14f", "#f28e2b", "#e15759"])
+                color=["#4e79a7", "#a0cbe8", "#59a14f", "#59a14f", "#59a14f", "#59a14f", "#f28e2b", "#e15759", "#76b7b2", "#b07aa1"])
     axes[0].set_ylim(0.0, 1.0)
     axes[0].set_title("Benchmark metrics")
     axes[0].tick_params(axis="x", rotation=30)
@@ -599,20 +611,23 @@ def run_labeled_benchmark(state: dict[str, Any], benchmark_config: dict[str, Any
 
     print("\nWorst-performing labeled images:")
     for item in worst_results:
-        print(f"  {item['image_id']}: score={item['image_score']:.3f}, "
-              f"center(pred/true)={item['pred_summary']['center_card']}/{item['true_summary']['center_card']}")
+        print(f"   {item['image_id']}: score={item['image_score']:.3f}, "
+              f"center(pred/true)={item['pred_summary']['center_card']}/{item['true_summary']['center_card']}, "
+              f"active(pred/true)={item['pred_summary']['active_player']}/{item['true_summary']['active_player']}")
 
     print("\nTop-performing labeled images:")
     for item in top_results:
-        print(f"  {item['image_id']}: score={item['image_score']:.3f}, "
-              f"center(pred/true)={item['pred_summary']['center_card']}/{item['true_summary']['center_card']}")
+        print(f"   {item['image_id']}: score={item['image_score']:.3f}, "
+              f"center(pred/true)={item['pred_summary']['center_card']}/{item['true_summary']['center_card']}, "
+              f"active(pred/true)={item['pred_summary']['active_player']}/{item['true_summary']['active_player']}")
 
     _plot_qualitative(worst_results, f"Worst {len(worst_results)} performers", state, eval_threshold)
     _plot_qualitative(top_results, f"Top {len(top_results)} performers", state, eval_threshold)
 
     benchmark = {
         "results": results,
-        "center_acc": center_acc,
+        "center_acc": center_acc_val,
+        "active_player_acc": active_player_acc_val,
         "p1_f1": p_means[0], "p2_f1": p_means[1], "p3_f1": p_means[2], "p4_f1": p_means[3],
         "macro_f1": macro_f1,
         "overall": overall,
