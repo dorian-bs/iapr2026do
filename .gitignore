@@ -11,10 +11,8 @@ L1000767/**/*.jpg
 L1000768/**/*.jpg
 
 # ignore training data
-training_data/training_images/**/*.jpg
-training_data/training_images/**/*.png
-training_data/training_masks/**/*.jpg
-training_data/training_masks/**/*.png
+training_data/augmented_data/**/*.jpg
+training_data/augmented_data/**/*.png
 training_data/reference_manual_masks/*.afphoto
 
 # ignore models

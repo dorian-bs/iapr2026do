@@ -4,12 +4,12 @@ Usage
 -----
     python main.py
     python main.py --test-dir data/iapr-26-uno-vision-challenge/test_images \\
-                   --models-dir project/models \\
+                   --models-dir models \\
                    --output submission.csv
 
 This is the script referenced in the IAPR 2026 submission instructions: running
 it from the repository root must regenerate the file uploaded to Kaggle, byte
-for byte (assuming the same model checkpoints under `project/models`).
+for byte (assuming the same model checkpoints under `models/`).
 """
 from __future__ import annotations
 
@@ -19,8 +19,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from src.inference import InferenceConfig, load_engine, predict_from_path
-from src.submission import write_submission
+from src.inference import InferenceConfig, load_engine, predict_from_path, write_submission
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,8 +33,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--models-dir",
         type=Path,
-        default=Path("project/models"),
-        help="Folder with the segmenter + classifier bundle (see src/shared/model_paths.py).",
+        default=Path("models"),
+        help="Folder with the segmenter + classifier bundle.",
     )
     parser.add_argument(
         "--output",

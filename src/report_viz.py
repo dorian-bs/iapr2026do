@@ -8,18 +8,24 @@ matplotlib in every cell.
 """
 from __future__ import annotations
 
+import csv
 from collections import Counter
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
 
-from src.inference import CardPrediction, GameState, InferenceEngine, predict_cards
-from src.shared.card_pipeline import (
+from src.inference import (
+    CardPrediction,
+    GameState,
+    InferenceEngine,
     boxes_from_probability,
+    predict_cards,
+    predict_game_state,
     segment_scene_probability,
 )
 
@@ -31,6 +37,22 @@ REGION_COLORS = {
     "p3": "tab:red",
     "p4": "tab:purple",
 }
+
+
+def _annotate_bars(axis: plt.Axes, fmt: str = "{:.2f}") -> None:
+    for patch in axis.patches:
+        height = float(patch.get_height())
+        if height <= 0:
+            continue
+        axis.annotate(
+            fmt.format(height),
+            (patch.get_x() + patch.get_width() / 2, height),
+            ha="center",
+            va="bottom",
+            xytext=(0, 3),
+            textcoords="offset points",
+            fontsize=8,
+        )
 
 
 def plot_pipeline_stages(
@@ -112,8 +134,7 @@ def plot_region_layout(image_w: int = 3000, image_h: int = 2000) -> None:
     ax.set_ylim(image_h, 0)
     ax.set_aspect("equal")
 
-    # Central rectangle = "center" region. Outside the rectangle, the closest
-    # player edge wins (see `src.shared.card_pipeline.assign_region`).
+    # Central rectangle = "center" region. Outside it, the closest player edge wins.
     cx_lo, cx_hi = 0.36, 0.64
     cy_lo, cy_hi = 0.30, 0.70
     ax.add_patch(Rectangle(
@@ -205,10 +226,92 @@ def plot_card_count_per_region(game_states: Iterable[GameState]) -> None:
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.boxplot(
         [region_counts[k] for k in ("center", "p1", "p2", "p3", "p4")],
-        tick_labels=["center", "p1", "p2", "p3", "p4"],
+        labels=["center", "p1", "p2", "p3", "p4"],
     )
     ax.set_ylabel("Cards detected")
     ax.set_title("Per-region card count distribution")
+    plt.tight_layout()
+    plt.show()
+
+
+def summarize_prediction_set(game_states: Iterable[GameState]) -> dict[str, Any]:
+    """Aggregate inference-only predictions for a compact test-set audit."""
+    states = list(game_states)
+    predictions = [prediction for state in states for prediction in state.cards]
+    region_order = ["center", "p1", "p2", "p3", "p4"]
+    region_counts = {region: [] for region in region_order}
+    cards_per_image: list[int] = []
+
+    for state in states:
+        per_region = {region: 0 for region in region_order}
+        for prediction in state.cards:
+            if prediction.region in per_region:
+                per_region[prediction.region] += 1
+        for region in region_order:
+            region_counts[region].append(per_region[region])
+        cards_per_image.append(len(state.cards))
+
+    return {
+        "states": states,
+        "predictions": predictions,
+        "n_images": len(states),
+        "n_cards": len(predictions),
+        "confidences": [prediction.confidence for prediction in predictions],
+        "class_counts": Counter(prediction.label for prediction in predictions),
+        "region_counts": region_counts,
+        "cards_per_image": cards_per_image,
+    }
+
+
+def print_prediction_set_summary(summary: dict[str, Any]) -> None:
+    confidences = summary["confidences"]
+    mean_conf = float(np.mean(confidences)) if confidences else 0.0
+    cards_per_image = summary["cards_per_image"]
+    mean_cards = float(np.mean(cards_per_image)) if cards_per_image else 0.0
+    print(
+        f"Prediction audit: {summary['n_images']} images, {summary['n_cards']} cards, "
+        f"mean cards/image={mean_cards:.2f}, mean confidence={mean_conf:.3f}."
+    )
+
+
+def plot_prediction_set_diagnostics(summary: dict[str, Any], top_n: int = 14) -> None:
+    """One dashboard for inference-only prediction sanity checks."""
+    fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+    confidences = summary["confidences"]
+    if confidences:
+        axes[0, 0].hist(confidences, bins=20, color="#4e79a7", edgecolor="white")
+        axes[0, 0].axvline(float(np.mean(confidences)), color="black", linestyle="--", linewidth=1)
+    axes[0, 0].set_xlim(0, 1)
+    axes[0, 0].set_title("Classifier confidence")
+    axes[0, 0].set_xlabel("Softmax confidence")
+    axes[0, 0].set_ylabel("Predicted cards")
+
+    cards_per_image = summary["cards_per_image"]
+    if cards_per_image:
+        axes[0, 1].hist(cards_per_image, bins=range(0, max(cards_per_image) + 2), color="#59a14f", edgecolor="white")
+        axes[0, 1].axvline(float(np.mean(cards_per_image)), color="black", linestyle="--", linewidth=1)
+    axes[0, 1].set_title("Detected cards per image")
+    axes[0, 1].set_xlabel("Cards")
+    axes[0, 1].set_ylabel("Images")
+
+    region_order = ["center", "p1", "p2", "p3", "p4"]
+    region_counts = summary["region_counts"]
+    axes[1, 0].boxplot([region_counts[region] for region in region_order], labels=region_order)
+    axes[1, 0].set_title("Per-region card counts")
+    axes[1, 0].set_ylabel("Cards")
+
+    top_classes = summary["class_counts"].most_common(top_n)
+    if top_classes:
+        labels, counts = zip(*top_classes)
+        y_positions = np.arange(len(labels))
+        axes[1, 1].barh(y_positions, counts, color="#f28e2b")
+        axes[1, 1].set_yticks(y_positions)
+        axes[1, 1].set_yticklabels(labels, fontsize=8)
+        axes[1, 1].invert_yaxis()
+    axes[1, 1].set_title(f"Top {min(top_n, len(top_classes))} predicted classes")
+    axes[1, 1].set_xlabel("Count")
+
+    fig.suptitle("Inference-only test prediction audit", fontsize=13)
     plt.tight_layout()
     plt.show()
 
@@ -247,5 +350,311 @@ def plot_qualitative_grid(
 
     for j in range(len(examples), rows * cols):
         axes[j // cols, j % cols].set_visible(False)
+    plt.tight_layout()
+    plt.show()
+
+
+@dataclass
+class BenchmarkConfig:
+    eval_max_images: int | None = None
+    eval_random_subset: bool = True
+    eval_seed: int = 42
+    eval_threshold: float | None = None
+    worst_k: int = 25
+    top_k: int = 25
+    show_plots: bool = True
+    verbose: bool = True
+    progress_every: int | None = None
+
+
+def parse_cards_field(value: str) -> list[str]:
+    text = str(value).strip()
+    if not text or text.upper() == "EMPTY":
+        return []
+    return [token.strip() for token in text.split(";") if token.strip() and token.strip().upper() != "EMPTY"]
+
+
+def bag_f1(pred_cards: list[str], true_cards: list[str]) -> float:
+    pred_counter = Counter(pred_cards)
+    true_counter = Counter(true_cards)
+    true_positive = sum((pred_counter & true_counter).values())
+    false_positive = sum((pred_counter - true_counter).values())
+    false_negative = sum((true_counter - pred_counter).values())
+    denom = 2 * true_positive + false_positive + false_negative
+    return 1.0 if denom == 0 else (2 * true_positive) / denom
+
+
+def run_labeled_benchmark(
+    engine: InferenceEngine,
+    train_csv_path: Path,
+    train_images_dir: Path,
+    benchmark_config: BenchmarkConfig | None = None,
+) -> dict[str, Any]:
+    """Evaluate the full pipeline against official labelled train.csv rows."""
+    config = benchmark_config or BenchmarkConfig()
+    eval_threshold = engine.config.segmenter_threshold if config.eval_threshold is None else float(config.eval_threshold)
+    eval_engine = replace(engine, config=replace(engine.config, segmenter_threshold=eval_threshold))
+
+    train_csv_path = Path(train_csv_path)
+    train_images_dir = Path(train_images_dir)
+    if not train_csv_path.is_file():
+        raise FileNotFoundError(f"Missing labelled CSV for evaluation: {train_csv_path}")
+
+    with train_csv_path.open("r", newline="", encoding="utf-8") as csv_file:
+        truth_rows = [
+            row for row in csv.DictReader(csv_file)
+            if (train_images_dir / f"{str(row['image_id']).strip()}.jpg").is_file()
+        ]
+    if not truth_rows:
+        raise RuntimeError("No labelled train images found for benchmark.")
+
+    if config.eval_max_images is not None and len(truth_rows) > config.eval_max_images:
+        if config.eval_random_subset:
+            rng = np.random.default_rng(config.eval_seed)
+            chosen = rng.choice(len(truth_rows), size=config.eval_max_images, replace=False)
+            truth_rows = [truth_rows[int(index)] for index in sorted(chosen)]
+        else:
+            truth_rows = truth_rows[: config.eval_max_images]
+
+    if config.verbose:
+        print(f"Benchmark: {len(truth_rows)} labelled images, segmenter threshold={eval_threshold:.2f}.")
+    results: list[dict[str, Any]] = []
+    for row_index, row in enumerate(truth_rows, start=1):
+        image_id = str(row["image_id"]).strip()
+        image_path = train_images_dir / f"{image_id}.jpg"
+        image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            continue
+
+        pred_state = predict_game_state(eval_engine, image_bgr, image_id)
+        pred_summary = pred_state.as_submission_row()
+        true_summary = {
+            "image_id": image_id,
+            "center_card": str(row["center_card"]).strip(),
+            "active_player": str(row["active_player"]).strip(),
+            "player_1_cards": str(row["player_1_cards"]).strip(),
+            "player_2_cards": str(row["player_2_cards"]).strip(),
+            "player_3_cards": str(row["player_3_cards"]).strip(),
+            "player_4_cards": str(row["player_4_cards"]).strip(),
+        }
+
+        player_f1s = [
+            bag_f1(
+                parse_cards_field(pred_summary[f"player_{player_index}_cards"]),
+                parse_cards_field(true_summary[f"player_{player_index}_cards"]),
+            )
+            for player_index in (1, 2, 3, 4)
+        ]
+        center_acc = float(pred_summary["center_card"] == true_summary["center_card"])
+        image_score = float(np.mean([center_acc] + player_f1s))
+
+        true_counts = {
+            "center": 0 if true_summary["center_card"].upper() == "EMPTY" else 1,
+            "p1": len(parse_cards_field(true_summary["player_1_cards"])),
+            "p2": len(parse_cards_field(true_summary["player_2_cards"])),
+            "p3": len(parse_cards_field(true_summary["player_3_cards"])),
+            "p4": len(parse_cards_field(true_summary["player_4_cards"])),
+        }
+        pred_counts = {"center": 0, "p1": 0, "p2": 0, "p3": 0, "p4": 0}
+        for prediction in pred_state.cards:
+            if prediction.region in pred_counts:
+                pred_counts[prediction.region] += 1
+
+        true_card_count = int(sum(true_counts.values()))
+        pred_card_count = int(sum(pred_counts.values()))
+        card_count_diff = pred_card_count - true_card_count
+        abs_card_count_diff = abs(card_count_diff)
+        region_abs_diff = int(sum(abs(pred_counts[region] - true_counts[region]) for region in true_counts))
+        count_quality = 1.0 / (1.0 + float(abs_card_count_diff))
+
+        results.append({
+            "image_id": image_id,
+            "image_path": image_path,
+            "pred_state": pred_state,
+            "pred_summary": pred_summary,
+            "true_summary": true_summary,
+            "true_counts": true_counts,
+            "pred_counts": pred_counts,
+            "center_acc": center_acc,
+            "p1_f1": player_f1s[0],
+            "p2_f1": player_f1s[1],
+            "p3_f1": player_f1s[2],
+            "p4_f1": player_f1s[3],
+            "image_score": image_score,
+            "image_score_strict": float(np.mean([center_acc] + player_f1s + [count_quality])),
+            "true_card_count": true_card_count,
+            "pred_card_count": pred_card_count,
+            "card_count_diff": card_count_diff,
+            "abs_card_count_diff": abs_card_count_diff,
+            "region_abs_card_count_diff": region_abs_diff,
+            "segmenter_count_quality": count_quality,
+        })
+
+        if config.progress_every and (row_index % config.progress_every == 0 or row_index == len(truth_rows)):
+            print(f"  processed {row_index}/{len(truth_rows)}")
+
+    if not results:
+        raise RuntimeError("Benchmark could not process any image.")
+
+    center_acc = float(np.mean([result["center_acc"] for result in results]))
+    player_means = [float(np.mean([result[f"p{player_index}_f1"] for result in results])) for player_index in (1, 2, 3, 4)]
+    macro_f1 = float(np.mean(player_means))
+    overall = float(np.mean([result["image_score"] for result in results]))
+    overall_strict = float(np.mean([result["image_score_strict"] for result in results]))
+    segmenter_count_quality = float(np.mean([result["segmenter_count_quality"] for result in results]))
+
+    worst_results = sorted(results, key=lambda result: result["image_score"])[: min(config.worst_k, len(results))]
+    top_results = sorted(results, key=lambda result: result["image_score"], reverse=True)[: min(config.top_k, len(results))]
+    if config.verbose:
+        weakest = ", ".join(f"{item['image_id']}={item['image_score']:.2f}" for item in worst_results) or "none"
+        print(
+            "Benchmark summary: "
+            f"center={center_acc:.3f}, player_macro={macro_f1:.3f}, "
+            f"overall={overall:.3f}, strict={overall_strict:.3f}, "
+            f"count_MAE={np.mean([result['abs_card_count_diff'] for result in results]):.2f}, "
+            f"cards pred/true={sum(result['pred_card_count'] for result in results)}/{sum(result['true_card_count'] for result in results)}."
+        )
+        print(f"Weakest labelled images: {weakest}.")
+        print("Active player is emitted as EMPTY and not scored in this local benchmark.")
+
+    benchmark = {
+        "results": results,
+        "center_acc": center_acc,
+        "p1_f1": player_means[0],
+        "p2_f1": player_means[1],
+        "p3_f1": player_means[2],
+        "p4_f1": player_means[3],
+        "macro_f1": macro_f1,
+        "overall": overall,
+        "overall_strict": overall_strict,
+        "cards_total_true": int(sum(result["true_card_count"] for result in results)),
+        "cards_total_pred": int(sum(result["pred_card_count"] for result in results)),
+        "avg_signed_card_count_diff": float(np.mean([result["card_count_diff"] for result in results])),
+        "avg_abs_card_count_diff": float(np.mean([result["abs_card_count_diff"] for result in results])),
+        "avg_region_abs_card_count_diff": float(np.mean([result["region_abs_card_count_diff"] for result in results])),
+        "segmenter_count_quality": segmenter_count_quality,
+        "worst_results": worst_results,
+        "top_results": top_results,
+        "eval_threshold": eval_threshold,
+    }
+
+    if config.show_plots:
+        plot_benchmark_summary(benchmark)
+        plot_benchmark_examples(worst_results, "Lowest-scoring labelled examples", eval_engine)
+    return benchmark
+
+
+def plot_benchmark_summary(benchmark: dict[str, object]) -> None:
+    """Four-panel benchmark dashboard for the final report."""
+    metric_names = ["center", "p1", "p2", "p3", "p4", "macro", "overall"]
+    metric_values = [
+        float(benchmark["center_acc"]),
+        float(benchmark["p1_f1"]),
+        float(benchmark["p2_f1"]),
+        float(benchmark["p3_f1"]),
+        float(benchmark["p4_f1"]),
+        float(benchmark["macro_f1"]),
+        float(benchmark["overall"]),
+    ]
+    results = list(benchmark["results"])
+    image_scores = [float(result["image_score"]) for result in results]
+    bin_count = min(24, max(8, int(np.sqrt(len(image_scores)))))
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+    axes[0, 0].bar(metric_names, metric_values, color=["#4e79a7"] + ["#59a14f"] * 4 + ["#f28e2b", "#76b7b2"])
+    axes[0, 0].set_ylim(0.0, 1.0)
+    axes[0, 0].set_title("Structured-state scores")
+    axes[0, 0].tick_params(axis="x", rotation=25)
+    _annotate_bars(axes[0, 0])
+
+    axes[0, 1].hist(image_scores, bins=bin_count, color="#76b7b2", edgecolor="white")
+    axes[0, 1].axvline(float(benchmark["overall"]), color="black", linestyle="--", linewidth=1)
+    axes[0, 1].set_xlim(0.0, 1.0)
+    axes[0, 1].set_title("Per-image score distribution")
+    axes[0, 1].set_xlabel("Image score")
+    axes[0, 1].set_ylabel("Images")
+
+    true_counts = [int(result["true_card_count"]) for result in results]
+    pred_counts = [int(result["pred_card_count"]) for result in results]
+    scatter = axes[1, 0].scatter(true_counts, pred_counts, c=image_scores, cmap="viridis", vmin=0, vmax=1, alpha=0.85)
+    limit = max(true_counts + pred_counts + [1])
+    axes[1, 0].plot([0, limit], [0, limit], color="black", linestyle="--", linewidth=1)
+    axes[1, 0].set_xlabel("True cards")
+    axes[1, 0].set_ylabel("Predicted cards")
+    axes[1, 0].set_title("Detection count vs label")
+    colorbar = fig.colorbar(scatter, ax=axes[1, 0], fraction=0.046, pad=0.04)
+    colorbar.set_label("image score")
+
+    region_order = ["center", "p1", "p2", "p3", "p4"]
+    region_mae = [
+        np.mean([abs(int(result["pred_counts"][region]) - int(result["true_counts"][region])) for result in results])
+        for region in region_order
+    ]
+    axes[1, 1].bar(region_order, region_mae, color="#e15759")
+    axes[1, 1].set_title("Mean absolute count error by region")
+    axes[1, 1].set_ylabel("Cards")
+    _annotate_bars(axes[1, 1])
+
+    fig.suptitle("Labelled benchmark audit", fontsize=13)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_benchmark_examples(
+    examples: list[dict[str, object]],
+    title: str,
+    engine: InferenceEngine | None = None,
+    cols: int = 2,
+) -> None:
+    """Compact qualitative overlays for the lowest-scoring labelled examples."""
+    if not examples:
+        print(f"No examples to plot for: {title}")
+        return
+
+    _ = engine
+    rows = (len(examples) + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(7.2 * cols, 5.2 * rows), squeeze=False)
+
+    for index, item in enumerate(examples):
+        row_index, col_index = divmod(index, cols)
+        axis = axes[row_index, col_index]
+        image_path = Path(item["image_path"])
+        image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            axis.axis("off")
+            continue
+
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        pred_state = item["pred_state"]
+        predictions = pred_state.cards if isinstance(pred_state, GameState) else []
+
+        axis.imshow(image_rgb)
+        for pred in predictions:
+            color = REGION_COLORS.get(pred.region, "white")
+            x0, y0, x1, y1 = pred.box
+            axis.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=color, linewidth=2.2))
+            axis.text(
+                x0,
+                max(0, y0 - 8),
+                f"{pred.region}: {pred.label} ({pred.confidence:.2f})",
+                color="white",
+                fontsize=7,
+                bbox={"facecolor": color, "alpha": 0.85, "pad": 2, "edgecolor": "none"},
+            )
+
+        pred_summary = item["pred_summary"]
+        true_summary = item["true_summary"]
+        axis.set_title(
+            f"{item['image_id']} score={float(item['image_score']):.3f}\n"
+            f"center {pred_summary['center_card']} -> {true_summary['center_card']} | "
+            f"cards {item['pred_card_count']} -> {item['true_card_count']}",
+            fontsize=9,
+        )
+        axis.axis("off")
+
+    for index in range(len(examples), rows * cols):
+        axes[index // cols, index % cols].axis("off")
+
+    fig.suptitle(title, fontsize=12)
     plt.tight_layout()
     plt.show()
