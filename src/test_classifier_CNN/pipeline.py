@@ -636,7 +636,8 @@ def _plot_qualitative(examples: list[dict[str, Any]], title: str, state: dict[st
         return
 
     region_colors = state["region_colors"]
-    fig, axes = plt.subplots(len(examples), 2, figsize=(13, 4.8 * len(examples)))
+    growth_px = int(state.get("instance_mask_growth_px", 0))
+    fig, axes = plt.subplots(len(examples), 3, figsize=(18, 4.8 * len(examples)))
     axes = np.array(axes, dtype=object)
     if axes.ndim == 1:
         axes = axes.reshape(1, -1)
@@ -646,17 +647,23 @@ def _plot_qualitative(examples: list[dict[str, Any]], title: str, state: dict[st
         if image_bgr is None:
             axes[row_idx, 0].axis("off")
             axes[row_idx, 1].axis("off")
+            axes[row_idx, 2].axis("off")
             continue
 
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
         probability = segment_scene_probability(
             image_bgr, state["segmenter"], state["device"], target_size=state["segmenter_img_size"],
         )
-        _, mask = boxes_from_probability(
+        _, mask, instance_masks = boxes_from_probability(
             probability,
             threshold=threshold,
             min_component_area=state.get("segmenter_min_component_area"),
+            instance_mask_growth_px=growth_px,
+            return_instance_masks=True,
         )
+        dilated_mask = np.zeros_like(mask, dtype=np.uint8)
+        for instance_mask in instance_masks:
+            dilated_mask = np.maximum(dilated_mask, instance_mask)
 
         ax_img = axes[row_idx, 0]
         ax_img.imshow(image_rgb)
@@ -682,6 +689,11 @@ def _plot_qualitative(examples: list[dict[str, Any]], title: str, state: dict[st
         ax_mask.imshow(mask, cmap="gray", vmin=0, vmax=1)
         ax_mask.set_title("Predicted segmentation mask", fontsize=9)
         ax_mask.axis("off")
+
+        ax_dilated = axes[row_idx, 2]
+        ax_dilated.imshow(dilated_mask, cmap="gray", vmin=0, vmax=1)
+        ax_dilated.set_title(f"Grown instance mask (+{growth_px}px)", fontsize=9)
+        ax_dilated.axis("off")
 
     fig.suptitle(title, fontsize=12)
     plt.tight_layout()
