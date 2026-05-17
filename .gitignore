@@ -3,22 +3,22 @@ __pycache__/
 .venv/
 
 # ignore generated jpg files
-project/aug/*.jpg
-project/aug_masks/*.jpg
-project/L1000765/**/*.jpg
-project/L1000766/**/*.jpg
-project/L1000767/**/*.jpg
-project/L1000768/**/*.jpg
+aug/*.jpg
+aug_masks/*.jpg
+L1000765/**/*.jpg
+L1000766/**/*.jpg
+L1000767/**/*.jpg
+L1000768/**/*.jpg
 
 # ignore training data
-project/training_data/training_images/**/*.jpg
-project/training_data/training_images/**/*.png
-project/training_data/training_masks/**/*.jpg
-project/training_data/training_masks/**/*.png
-project/training_data/reference_manual_masks/*.afphoto
+training_data/training_images/**/*.jpg
+training_data/training_images/**/*.png
+training_data/training_masks/**/*.jpg
+training_data/training_masks/**/*.png
+training_data/reference_manual_masks/*.afphoto
 
 # ignore models
-project/models/
+models/
 
 # ignore classifiers
 *.pkl
@@ -27,3 +27,4 @@ project/models/
 # ignore dorian's files
 projodo/
 *.DS_Store
+.old/

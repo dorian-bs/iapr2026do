@@ -1,100 +1,94 @@
-# Image Analysis and Pattern Recognition
+# IAPR 2026 — Final Project: UNO Vision Challenge
 
-## General information
-* Lecturer: [Jean-Philippe Thiran][jpt]
-* [EE-451 coursebook][coursebook]
-* [Moodle][moodle]
+EPFL EE-451 final project. Recover the structured game state (center card,
+active player, four hands) from snapshots of a multiplayer UNO game.
 
-[moodle]: https://moodle.epfl.ch/course/view.php?id=5091
-[jpt]: https://people.epfl.ch/115534
-[coursebook]: https://edu.epfl.ch/coursebook/en/image-analysis-and-pattern-recognition-EE-451
+Group: `<group_id>` — `<kaggle_group_name>`. See `report.ipynb` for the full
+write-up.
 
-### Objective of this course
-Learn the basic methods of digital image analysis and pattern recognition:
-pre-processing, image segmentation, shape representation and classification.
-These concepts will be illustrated by applications in computer vision and
-medical image analysis.
+## Repository layout
 
-### Objective of this repository
-This repository contains the material for the labs and project associated with
-the [EPFL] master course
-[EE-451 Image Analysis and Pattern Recognition][edu].
+```
+.
+├── main.py                 # produces the Kaggle submission CSV
+├── report.ipynb            # the project report notebook
+├── requirements.txt
+├── data/
+│   └── iapr-26-uno-vision-challenge/   # official Kaggle assets
+├── project/
+│   ├── models/             # trained model checkpoints used at inference
+│   │   ├── segmenter/used/scene_segmenter_unet_small.pth
+│   │   └── card_classifier_cnn/used/latest/{card_classifier.pth, classes.npy, config.json}
+│   ├── notebooks/          # training & data-generation notebooks (one per stage)
+│   └── training_data/      # generated reference/augmented data (regenerable)
+└── src/
+    ├── inference.py        # scene image -> GameState (end-to-end inference)
+    ├── submission.py       # submission CSV writer + schema validator (R5)
+    ├── active_player.py    # token-detection stub (active player) — WIP
+    ├── report_viz.py       # plotting helpers used by report.ipynb
+    ├── shared/             # cross-stage primitives (models, masking, geometry)
+    ├── create_reference_cards/   # extract reference cards from labelled images
+    ├── create_augmented_data/    # synthesize training compositions
+    ├── train_segmenter/          # train the U-Net segmenter
+    ├── train_classifier_CNN/     # train the masked card classifier
+    └── test_classifier_CNN/      # labelled-data benchmark used by the report
+```
 
-[epfl]: https://www.epfl.ch/
-[edu]: https://edu.epfl.ch/coursebook/en/image-analysis-and-pattern-recognition-EE-451
+## How to reproduce the Kaggle submission
 
-### Labs instructions
+```bash
+pip install -r requirements.txt
+python main.py
+```
 
-The lab assignments aim to impart practical implementation skills related to the topics covered in class and serve as preparation for the final project. The final project is a hands-on endeavor that consolidates the concepts covered throughout the course. The labs themselves are in the form of Jupyter Notebooks, and need to be solved in groups of **three students**. Please make your groups on Moodle before `March 6th`.
+This loads the segmenter + classifier from `project/models/`, runs inference
+on every image in `data/iapr-26-uno-vision-challenge/test_images/`, validates
+the schema, and writes `submission.csv` at the repo root.
 
-It is important to note that the labs will be **graded**. For each lab, each group is required to submit one Jupyter notebook on Moodle, following the naming convention `lab_<lab_number>_group_<group_id>.ipynb`, where `<lab_number>` indicates the lab number, and `<group_id>` is your group number.
+To run the full report (with figures, benchmark, and embedded submission):
 
-To ensure uniformity and minimize code conflicts, we strongly advise following the provided `Installation Instructions` below.
+```bash
+jupyter notebook report.ipynb
+```
 
-**Important Note:** Before submitting each notebook, please execute the command `Kernel > Restart & Run All` to run the entire notebook from scratch. This ensures that the code runs correctly. We will re-run each notebook during evaluation to verify the correctness of your code.
+## Compliance summary
 
-## Installation instructions
+The submission is bound by the IAPR 2026 challenge rules. The most important
+constraints are summarised below; the project README and code comments make
+the corresponding checks explicit at every stage.
 
-### Python and packages
-We will be using [git], [Python], and packages from the
-[Python scientific stack][scipy].
-If you don't know how to install these on your platform, we recommend to
-install [Anaconda] or [Miniconda], both are distributions of the [conda]
-package and environment manager.
-Please follow the below instructions to install it and create an environment
-for the course:
+| ID | Rule | Where enforced |
+|----|------|----------------|
+| R1 | No external datasets | Augmented data is composed only from challenge-provided cards/backgrounds. |
+| R2 | No pretrained weights | All models built with `weights=None` (`src/shared/card_models.py`). |
+| R3 | Test set = inference only | Training notebooks operate on `train_images/`; `main.py` only reads `test_images/`. |
+| R4 | ≤12M params per model | `assert_param_cap` runs on every model load (`src/inference.py`, training pipelines). |
+| R5 | Strict submission schema | `src/submission.validate_row` runs on every CSV row before writing. |
+| R6 | Fixed player geometry | `assign_region` in `src/shared/card_pipeline.py` (p1=bottom, p2=right, p3=top, p4=left). |
 
-1. Download the latest Python 3.x installer for Windows, macOS, or Linux from
-   <https://www.anaconda.com/download> or <https://conda.io/miniconda.html>
-   and install with default settings.
-   Skip this step if you have conda already installed (from [Miniconda] or
-   [Anaconda]).
-   Linux users may prefer to use their package manager.
-   * Windows: Double-click on the `.exe` file.
-   * macOS: Double-click on the `.pkg` file.
-   * Linux: Run `bash Anaconda3-latest-Linux-x86_64.sh` in your terminal.
-1. Open a terminal. For Windows: open the Anaconda Prompt from the Start menu.
-1. It is recommended to create an environment dedicated to this course with
-   `conda create -n iapr python=3.9.18`.
-1. Activate the environment:
-   * Linux/macOS: `conda activate iapr`.
-   * Windows: `activate iapr`.
-1. Install the packages we will be using for this course:
-   * `conda install notebook`
-1. You can deactivate the environment whenever you are done with `deactivate`
-1. Install git if not already installed with `conda install git`.
-1. Follow git instructions in the `Github` section below.
-   
-[git]: https://git-scm.com
-[python]: https://www.python.org
-[scipy]: https://www.scipy.org
-[anaconda]: https://anaconda.org
-[miniconda]: https://conda.io/miniconda.html
-[conda]: https://conda.io
+## Pipeline overview
 
-### Github
+1. **Segmenter** (`SceneUNetSmall`) — small U-Net producing a per-pixel card
+   foreground probability on a 256-px letterboxed input.
+2. **Instance extraction** — threshold + connected components + erosion-based
+   touching-component split + bounded mask growth, yielding one mask per card.
+3. **Classifier** (`CardResNet18SmallClassifier`) — compact ResNet-18 trained
+   from random init, takes a 4-channel input (RGB + binary mask) so the
+   network is forced to ignore background variation.
+4. **Region assignment** — geometric assignment of each box to `center` or one
+   of `p1..p4` per R6.
+5. **Active player** — token detection (see `src/active_player.py`, **work in
+   progress**).
 
-Git serves as a valuable tool for collaborative teamwork. To seamlessly access the upcoming labs and projects we'll be releasing throughout the semester, and to facilitate collaboration using Git, we highly recommend following these steps:
+## Final submission packaging
 
-1. Initiate the process by creating a private **empty** repository for your group, `<my_group_repo>`, on Github. Ensure that it **does not** include `README.md` and `.gitignore`.
-1. Clone your group remote repository locally using the command: `git clone https://github.com/<my_group_repo>`.
-1. Establish the course repository, iapr, as a remote repository by executing the command: `git remote add upstream https://github.com/LTS5/iapr2026.git` (or use the SSH variant if preferred).
-1. Stay up-to-date by fetching and merging changes from the iapr repository into your local branch with: `git pull upstream main`.
-1. Once you've collected the code, push it to your remote repository: `git push origin main`.
+The submission archive must be named
+`final_group_<group_id>_<kaggle_group_name>.zip` and contain at least:
 
-Throughout the semester, we will periodically update the `iapr` repository with new labs and the project. To sync with the latest data, execute `git pull upstream main`. Exercise caution for potential conflicts; it's advisable to rename your Juypter Notebooks to `lab_<lab_number>_group_<group_id>.ipynb` (See Lab instructions) to prevent accidental overwriting of your code during merges.
-
-### Python editors
-
-[Jupyter] is a very useful editor that run directly in a web browser.
-You can have Python and Markdown cells, hence it is very useful for
- examples, tutorials and labs.
- We encourage to use it for the lab assignments.
- To launch a Jupyter Notebook:
- * Open a terminal (for Windows open the Anaconda Prompt)
- * Move to the git repository `/path/to/iapr`
- * Activate the environment with `source activate iapr` (For Windows:
- `activate iapr`)
- * Run the command: `jupyter notebook`.
-
-[jupyter]: https://jupyter.org/
+- `report.ipynb`
+- `main.py`
+- `src/`
+- the model checkpoints required by `main.py`
+  (`project/models/segmenter/used/...` and
+  `project/models/card_classifier_cnn/used/latest/...`)
+- `requirements.txt`
