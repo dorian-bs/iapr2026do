@@ -823,50 +823,40 @@ def _annotate_bars(axis: plt.Axes) -> None:
 def plot_augmentation_overview(project_root: Path, summary: dict[str, Any], example_count: int = 2) -> None:
     """Single report figure for generated-data balance and visual sanity checks."""
     records = list(summary.get("sample_records", []))[: max(0, example_count)]
-    fig, axes = plt.subplots(
-        2,
-        4,
-        figsize=(18, 8),
-        gridspec_kw={"height_ratios": [1.0, 1.25]},
-        squeeze=False,
-    )
+    fig = plt.figure(figsize=(18, 8))
+    grid = fig.add_gridspec(2, 4, height_ratios=[1.0, 1.25])
+    summary_axes = [fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[0, 1:3]), fig.add_subplot(grid[0, 3])]
+    example_axes = [fig.add_subplot(grid[1, index]) for index in range(4)]
 
     active_counts = summary["active_player_counts"]
     active_labels = ["p1", "p2", "p3", "p4"]
-    axes[0, 0].bar(active_labels, [active_counts.get(label, 0) for label in active_labels], color="#4e79a7")
-    axes[0, 0].set_title("Active-player balance")
-    axes[0, 0].set_ylabel("Scenes")
-    _annotate_bars(axes[0, 0])
+    summary_axes[0].bar(active_labels, [active_counts.get(label, 0) for label in active_labels], color="#4e79a7")
+    summary_axes[0].set_title("Active-player balance")
+    summary_axes[0].set_ylabel("Scenes")
+    _annotate_bars(summary_axes[0])
 
     cards_per_scene = summary["cards_per_scene"]
-    axes[0, 1].hist(cards_per_scene, bins=range(0, max(cards_per_scene) + 2), color="#59a14f", edgecolor="white")
-    axes[0, 1].axvline(float(np.mean(cards_per_scene)), color="black", linestyle="--", linewidth=1)
-    axes[0, 1].set_title("Visible cards per scene")
-    axes[0, 1].set_xlabel("Cards")
-    axes[0, 1].set_ylabel("Scenes")
+    summary_axes[1].hist(cards_per_scene, bins=range(0, max(cards_per_scene) + 2), color="#59a14f", edgecolor="white")
+    summary_axes[1].axvline(float(np.mean(cards_per_scene)), color="black", linestyle="--", linewidth=1)
+    summary_axes[1].set_title("Visible cards per scene")
+    summary_axes[1].set_xlabel("Cards")
+    summary_axes[1].set_ylabel("Scenes")
 
     slot_counts = Counter(summary["cards_per_player_slot"])
     slot_x = sorted(slot_counts)
-    axes[0, 2].bar(slot_x, [slot_counts[value] for value in slot_x], color="#f28e2b")
-    axes[0, 2].set_title("Cards per player slot")
-    axes[0, 2].set_xlabel("Cards in hand")
-    axes[0, 2].set_ylabel("Player slots")
-    _annotate_bars(axes[0, 2])
-
-    class_counts = np.array(list(summary["class_counts"].values()), dtype=float)
-    axes[0, 3].hist(class_counts, bins=min(18, max(5, len(class_counts) // 3)), color="#af7aa1", edgecolor="white")
-    axes[0, 3].axvline(float(class_counts.mean()), color="black", linestyle="--", linewidth=1)
-    axes[0, 3].set_title("Augmented crops per class")
-    axes[0, 3].set_xlabel("Crops")
-    axes[0, 3].set_ylabel("Classes")
+    summary_axes[2].bar(slot_x, [slot_counts[value] for value in slot_x], color="#f28e2b")
+    summary_axes[2].set_title("Cards per player slot")
+    summary_axes[2].set_xlabel("Cards in hand")
+    summary_axes[2].set_ylabel("Player slots")
+    _annotate_bars(summary_axes[2])
 
     project_root = Path(project_root)
-    for axis in axes[1]:
+    for axis in example_axes:
         axis.axis("off")
 
     for record_index, record in enumerate(records[:2]):
-        image_axis = axes[1, record_index * 2]
-        mask_axis = axes[1, record_index * 2 + 1]
+        image_axis = example_axes[record_index * 2]
+        mask_axis = example_axes[record_index * 2 + 1]
         image_path = _training_path(project_root, record["image_path"])
         mask_path = _training_path(project_root, record["mask_path"])
         image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)

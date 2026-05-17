@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import gc
 import os
 import random
 import time
@@ -42,9 +43,10 @@ class SegmenterPipelineConfig:
     max_scene_pairs: int | None = None
     epoch_max_train_samples: int | None = 8192
     cache_in_ram: bool = True
-    num_workers: int = 12
+    num_workers: int = 4
+    persistent_workers: bool = True
 
-    epochs: int = 30
+    epochs: int = 2
     batch_size: int = 4
     learning_rate: float = 5e-4
     weight_decay: float = 1e-4
@@ -56,7 +58,7 @@ class SegmenterPipelineConfig:
     use_amp: bool = True
     use_torch_compile: bool = False
     early_stopping_patience: int | None = 8
-    log_every_batches: int = 64
+    log_every_batches: int = 0
 
     warm_start: bool = False
     warm_start_filename: str = "segmenter_unet_small.pth"
@@ -105,6 +107,20 @@ def _format_seconds(seconds: float) -> str:
     return f"{seconds:d}s"
 
 
+def _shutdown_loader_workers(loader: DataLoader | None) -> None:
+    if loader is None:
+        return
+    iterator = getattr(loader, "_iterator", None)
+    shutdown = getattr(iterator, "_shutdown_workers", None)
+    if callable(shutdown):
+        shutdown()
+    if iterator is not None:
+        try:
+            setattr(loader, "_iterator", None)
+        except Exception:
+            pass
+
+
 def _letterbox_pil(image: Image.Image, target_size: int, fill: int, interpolation: int) -> Image.Image:
     width, height = image.size
     scale = min(target_size / width, target_size / height)
@@ -139,7 +155,7 @@ class SceneSegDataset(Dataset):
             print(f"  Pre-loading {len(self.pairs)} scene pairs into RAM...")
             for index, (image_path, mask_path) in enumerate(self.pairs, start=1):
                 self.cache.append(preprocess_scene_pair(image_path, mask_path, image_size=self.image_size))
-                if index % 200 == 0 or index == len(self.pairs):
+                if index % 1000 == 0 or index == len(self.pairs):
                     print(f"  {index}/{len(self.pairs)} loaded")
 
     def __len__(self) -> int:
@@ -413,6 +429,8 @@ def initialize_segmenter_pipeline(
     use_amp = bool(cfg.use_amp and device.type == "cuda")
     train_ds = SceneSegDataset(train_pairs, image_size=cfg.image_size, augment=True, cache_in_ram=cfg.cache_in_ram)
     val_ds = SceneSegDataset(val_pairs, image_size=cfg.image_size, augment=False, cache_in_ram=cfg.cache_in_ram)
+    if cfg.num_workers < 0:
+        raise ValueError(f"num_workers must be >= 0, got {cfg.num_workers}")
     effective_workers = int(cfg.num_workers)
     if cfg.cache_in_ram and effective_workers > 0:
         print("[info] cache_in_ram=True; using num_workers=0 to avoid duplicating cached tensors.")
@@ -431,7 +449,7 @@ def initialize_segmenter_pipeline(
         "pin_memory": device.type == "cuda",
     }
     if effective_workers > 0:
-        loader_kwargs["persistent_workers"] = True
+        loader_kwargs["persistent_workers"] = bool(cfg.persistent_workers)
     train_loader = DataLoader(train_ds, shuffle=train_sampler is None, sampler=train_sampler, **loader_kwargs)
     val_loader = DataLoader(val_ds, shuffle=False, **loader_kwargs)
 
@@ -452,8 +470,18 @@ def initialize_segmenter_pipeline(
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=cfg.scheduler_factor, patience=cfg.scheduler_patience)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if device.type == "cuda" else None
     scene_checkpoint = model_output_dir / cfg.checkpoint_filename
-    print(f"Segmenter training pairs: train={len(train_pairs)} val={len(val_pairs)} missing_masks={len(missing_masks)}")
-    print(f"Device: {device} | checkpoint: {scene_checkpoint}")
+    print(
+        "Segmenter data: "
+        f"train={len(train_pairs):,}, val={len(val_pairs):,}, "
+        f"epoch_samples={epoch_train_samples:,}, missing_masks={len(missing_masks):,}."
+    )
+    print(
+        "Segmenter loader: "
+        f"batch_size={cfg.batch_size}, train_batches={len(train_loader):,}, val_batches={len(val_loader):,}, "
+        f"workers={effective_workers}, persistent={bool(cfg.persistent_workers and effective_workers > 0)}, "
+        f"pin_memory={device.type == 'cuda'}, cache_in_ram={cfg.cache_in_ram}."
+    )
+    print(f"Segmenter device: {device} | checkpoint: {scene_checkpoint}")
     return {
         "config": cfg,
         "project_root": project_root,
@@ -470,6 +498,9 @@ def initialize_segmenter_pipeline(
         "train_ds": train_ds,
         "val_ds": val_ds,
         "epoch_train_samples": epoch_train_samples,
+        "num_workers": effective_workers,
+        "pin_memory": device.type == "cuda",
+        "persistent_workers": bool(cfg.persistent_workers and effective_workers > 0),
         "train_loader": train_loader,
         "train_loader_kwargs": loader_kwargs,
         "val_loader": val_loader,
@@ -526,7 +557,14 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         coverage_rng = random.Random(cfg.seed)
         coverage_rng.shuffle(coverage_indices)
 
-    print(f"Starting segmenter training for {cfg.epochs} epochs | loss BCE/Dice={bce_weight:.2f}/{dice_weight:.2f}")
+    print(
+        f"\n[segmenter] epochs={cfg.epochs}, lr={cfg.learning_rate:.2e}, "
+        f"dataset_samples={len(train_ds):,}, samples_per_epoch={epoch_train_samples:,}"
+    )
+    print(
+        f"  loss_bce/dice={bce_weight:.2f}/{dice_weight:.2f} | "
+        f"selection={cfg.best_epoch_selection_metric} | amp={state['use_amp']} | workers={state.get('num_workers', 0)}"
+    )
     for epoch in range(1, cfg.epochs + 1):
         epoch_start = time.perf_counter()
         current_train_loader = train_loader
@@ -547,19 +585,23 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
             current_train_loader = DataLoader(train_ds, shuffle=False, sampler=sampler, **state["train_loader_kwargs"])
 
         train_start = time.perf_counter()
-        train_loss, train_iou, n_train = _train_one_epoch(
-            model,
-            current_train_loader,
-            optimizer,
-            bce_loss,
-            scaler,
-            state["use_amp"],
-            device,
-            bce_weight,
-            dice_weight,
-            cfg.log_every_batches,
-            state["channels_last"],
-        )
+        try:
+            train_loss, train_iou, n_train = _train_one_epoch(
+                model,
+                current_train_loader,
+                optimizer,
+                bce_loss,
+                scaler,
+                state["use_amp"],
+                device,
+                bce_weight,
+                dice_weight,
+                cfg.log_every_batches,
+                state["channels_last"],
+            )
+        finally:
+            if current_train_loader is not train_loader:
+                _shutdown_loader_workers(current_train_loader)
         train_seconds = time.perf_counter() - train_start
         val_start = time.perf_counter()
         val_metrics = _evaluate(
@@ -605,11 +647,15 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
         history["epoch_seconds"].append(epoch_seconds)
         history["train_seconds"].append(train_seconds)
         history["val_seconds"].append(val_seconds)
+        images_per_sec = n_train / max(train_seconds, 1e-9)
         print(
-            f"epoch {epoch:02d}/{cfg.epochs} | train_loss={train_loss:.4f} val_loss={val_metrics['loss']:.4f} "
-            f"train_iou={train_iou:.4f} val_iou={val_metrics['iou']:.4f} val_dice={val_metrics['dice']:.4f} "
-            f"count_mae={val_metrics['count_mae']:.2f} selection={selection:.4f} "
-            f"lr={optimizer.param_groups[0]['lr']:.2e} time={_format_seconds(epoch_seconds)}"
+            f"  epoch {epoch:03d}/{cfg.epochs} | train_iou={train_iou:.3f} loss={train_loss:.3f} | "
+            f"val_iou={val_metrics['iou']:.3f} dice={val_metrics['dice']:.3f} "
+            f"precision={val_metrics['precision']:.3f} recall={val_metrics['recall']:.3f} "
+            f"count_mae={val_metrics['count_mae']:.2f} | "
+            f"selection({cfg.best_epoch_selection_metric})={selection:.4f} "
+            f"lr={optimizer.param_groups[0]['lr']:.2e} time={_format_seconds(epoch_seconds)} "
+            f"({images_per_sec:.1f} img/s)"
             + (" | best" if improved else ""),
             flush=True,
         )
@@ -621,8 +667,34 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     state["best_selection_score"] = best_selection
     state["best_epoch"] = best_epoch
     state["training_seconds"] = time.perf_counter() - start
+    _shutdown_loader_workers(train_loader)
+    _shutdown_loader_workers(val_loader)
     print(f"Saved best segmenter checkpoint: {scene_checkpoint}")
     print(f"Best epoch {best_epoch}: val_iou={best_val_iou:.4f}, selection={best_selection:.4f}")
+    return state
+
+
+def release_segmenter_training_resources(state: dict[str, Any]) -> dict[str, Any]:
+    """Drop heavy training objects after plots have consumed the history."""
+    for key in ("train_loader", "val_loader"):
+        _shutdown_loader_workers(state.get(key))
+    for key in (
+        "train_loader",
+        "val_loader",
+        "train_ds",
+        "val_ds",
+        "model",
+        "optimizer",
+        "scheduler",
+        "scaler",
+        "bce_loss",
+    ):
+        state.pop(key, None)
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    state["resources_released"] = True
+    print("Released segmenter training loaders, cached datasets, and model state from RAM.")
     return state
 
 

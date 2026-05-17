@@ -17,13 +17,20 @@ from typing import Any, Iterable
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Rectangle
+from matplotlib.colors import to_rgba
+from matplotlib.patches import Patch, Polygon, Rectangle
 
 from src.inference import (
+    assign_region,
     CardPrediction,
+    detect_active_player,
+    divide_background,
     GameState,
     InferenceEngine,
     boxes_from_probability,
+    find_black_token,
+    find_yellow_token,
+    is_background_noisy,
     predict_cards,
     predict_game_state,
     segment_scene_probability,
@@ -123,7 +130,7 @@ def plot_pipeline_stages(
     plt.show()
 
 
-def plot_region_layout(image_w: int = 3000, image_h: int = 2000) -> None:
+def plot_region_layout(image_w: int = 3000, image_h: int = 2000, map_resolution: int = 480) -> None:
     """Schematic of the fixed player geometry (R6).
 
     Useful in the report to motivate the `assign_region` heuristic before
@@ -134,14 +141,30 @@ def plot_region_layout(image_w: int = 3000, image_h: int = 2000) -> None:
     ax.set_ylim(image_h, 0)
     ax.set_aspect("equal")
 
-    # Central rectangle = "center" region. Outside it, the closest player edge wins.
+    region_order = ["center", "p1", "p2", "p3", "p4"]
+    region_to_index = {region: index for index, region in enumerate(region_order)}
+    map_w = max(2, int(map_resolution))
+    map_h = max(2, int(round(map_w * image_h / image_w)))
+    region_map = np.empty((map_h, map_w), dtype=np.uint8)
+    for sample_y in range(map_h):
+        for sample_x in range(map_w):
+            region = assign_region((sample_x, sample_y, sample_x + 1, sample_y + 1), map_w, map_h)
+            region_map[sample_y, sample_x] = region_to_index[region]
+
+    region_rgba = np.zeros((map_h, map_w, 4), dtype=np.float32)
+    for region, index in region_to_index.items():
+        region_rgba[region_map == index] = to_rgba(REGION_COLORS[region], alpha=0.30)
+    ax.imshow(region_rgba, extent=(0, image_w, image_h, 0), interpolation="nearest")
+
+    # Central rectangle = "center" region. Outside it, assign_region chooses the
+    # nearest player edge with a small penalty for lateral displacement.
     cx_lo, cx_hi = 0.36, 0.64
     cy_lo, cy_hi = 0.30, 0.70
     ax.add_patch(Rectangle(
         (cx_lo * image_w, cy_lo * image_h),
         (cx_hi - cx_lo) * image_w,
         (cy_hi - cy_lo) * image_h,
-        fill=True, facecolor="gold", alpha=0.4, edgecolor="black",
+        fill=False, edgecolor="black", linewidth=1.6,
     ))
 
     annotations = [
@@ -153,10 +176,157 @@ def plot_region_layout(image_w: int = 3000, image_h: int = 2000) -> None:
     ]
     for px, py, label, color in annotations:
         ax.text(px * image_w, py * image_h, label, ha="center", va="center",
-                color=color, fontsize=11, fontweight="bold")
+                color="white", fontsize=11, fontweight="bold",
+                bbox={"facecolor": color, "alpha": 0.85, "pad": 3, "edgecolor": "none"})
 
-    ax.set_title("Fixed player geometry (R6)")
+    ax.set_title("Card-center attribution regions (R6)")
     ax.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+
+def _active_player_token_centers(img_bgr: np.ndarray) -> tuple[str, list[tuple[int, int]]]:
+    if is_background_noisy(img_bgr):
+        return "yellow disk", find_yellow_token(img_bgr)
+    return "dark rectangle", find_black_token(img_bgr)
+
+
+def plot_active_player_detection(
+    img_bgr: np.ndarray,
+    expected_player: str | None = None,
+    title: str | None = None,
+) -> None:
+    """Overlay the detected active-player token and fixed token sectors."""
+    image_height, image_width = img_bgr.shape[:2]
+    image_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    token_mode, centers = _active_player_token_centers(img_bgr)
+    predicted_player = detect_active_player(img_bgr)
+    polygons = divide_background(image_width, image_height)
+
+    fig, ax = plt.subplots(figsize=(9, 6))
+    ax.imshow(image_rgb)
+    for player, polygon in polygons.items():
+        ax.add_patch(Polygon(
+            polygon,
+            closed=True,
+            fill=True,
+            facecolor=REGION_COLORS[player],
+            alpha=0.15,
+            edgecolor=REGION_COLORS[player],
+            linewidth=2.0,
+        ))
+        center_x = float(np.mean([point[0] for point in polygon]))
+        center_y = float(np.mean([point[1] for point in polygon]))
+        ax.text(
+            center_x,
+            center_y,
+            player,
+            ha="center",
+            va="center",
+            color="white",
+            fontsize=11,
+            fontweight="bold",
+            bbox={"facecolor": REGION_COLORS[player], "alpha": 0.85, "pad": 3, "edgecolor": "none"},
+        )
+
+    if centers:
+        xs, ys = zip(*centers)
+        ax.scatter(xs, ys, s=160, c="none", edgecolors="black", linewidths=3, label="candidate token")
+        ax.scatter(xs, ys, s=70, c="yellow" if token_mode == "yellow disk" else "white", edgecolors="black", linewidths=1)
+    expected_text = "" if expected_player is None else f" | true={expected_player}"
+    ax.set_title(title or f"Active-player token: {token_mode} | pred={predicted_player}{expected_text}")
+    ax.axis("off")
+    plt.tight_layout()
+    plt.show()
+
+
+def summarize_active_player_detection(train_csv_path: Path, train_images_dir: Path) -> dict[str, Any]:
+    """Evaluate the deterministic token detector against labelled train rows."""
+    train_csv_path = Path(train_csv_path)
+    train_images_dir = Path(train_images_dir)
+    with train_csv_path.open("r", newline="", encoding="utf-8") as csv_file:
+        rows = list(csv.DictReader(csv_file))
+
+    results: list[dict[str, Any]] = []
+    for row in rows:
+        image_id = str(row["image_id"]).strip()
+        image_path = train_images_dir / f"{image_id}.jpg"
+        image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            continue
+        token_mode, centers = _active_player_token_centers(image_bgr)
+        predicted_player = detect_active_player(image_bgr)
+        true_player = str(row["active_player"]).strip()
+        results.append({
+            "image_id": image_id,
+            "image_path": image_path,
+            "token_mode": token_mode,
+            "predicted_player": predicted_player,
+            "true_player": true_player,
+            "is_correct": predicted_player == true_player,
+            "n_candidates": len(centers),
+        })
+
+    if not results:
+        raise RuntimeError("No labelled images available for active-player evaluation.")
+
+    modes = sorted({result["token_mode"] for result in results})
+    mode_accuracy = {
+        mode: float(np.mean([result["is_correct"] for result in results if result["token_mode"] == mode]))
+        for mode in modes
+    }
+    return {
+        "results": results,
+        "accuracy": float(np.mean([result["is_correct"] for result in results])),
+        "mode_accuracy": mode_accuracy,
+        "mode_counts": Counter(result["token_mode"] for result in results),
+        "confusion": Counter((result["true_player"], result["predicted_player"]) for result in results),
+        "unknown_count": sum(result["predicted_player"] == "unknown" for result in results),
+    }
+
+
+def print_active_player_summary(summary: dict[str, Any]) -> None:
+    mode_text = ", ".join(
+        f"{mode}={summary['mode_accuracy'][mode]:.3f} ({summary['mode_counts'][mode]})"
+        for mode in sorted(summary["mode_accuracy"])
+    )
+    print(
+        f"Active-player detector: accuracy={summary['accuracy']:.3f}, "
+        f"unknown={summary['unknown_count']}, by token/background: {mode_text}."
+    )
+
+
+def plot_active_player_summary(summary: dict[str, Any]) -> None:
+    """Two-panel graph: accuracy by token mode and active-player confusion."""
+    players = ["p1", "p2", "p3", "p4"]
+    predicted_labels = players + ["unknown"]
+    confusion = np.zeros((len(players), len(predicted_labels)), dtype=int)
+    for row_index, true_player in enumerate(players):
+        for col_index, predicted_player in enumerate(predicted_labels):
+            confusion[row_index, col_index] = int(summary["confusion"].get((true_player, predicted_player), 0))
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+    modes = sorted(summary["mode_accuracy"])
+    axes[0].bar(modes, [summary["mode_accuracy"][mode] for mode in modes], color=["#4e79a7", "#f28e2b"][: len(modes)])
+    axes[0].set_ylim(0, 1.05)
+    axes[0].set_ylabel("Accuracy")
+    axes[0].set_title("Active-player accuracy by token/background")
+    _annotate_bars(axes[0])
+
+    image = axes[1].imshow(confusion, cmap="Blues")
+    axes[1].set_xticks(range(len(predicted_labels)))
+    axes[1].set_xticklabels(predicted_labels)
+    axes[1].set_yticks(range(len(players)))
+    axes[1].set_yticklabels(players)
+    axes[1].set_xlabel("Predicted")
+    axes[1].set_ylabel("True")
+    axes[1].set_title("Active-player confusion")
+    for row_index in range(confusion.shape[0]):
+        for col_index in range(confusion.shape[1]):
+            value = confusion[row_index, col_index]
+            if value:
+                axes[1].text(col_index, row_index, str(value), ha="center", va="center", color="black")
+    fig.colorbar(image, ax=axes[1], fraction=0.046, pad=0.04)
     plt.tight_layout()
     plt.show()
 
@@ -446,7 +616,8 @@ def run_labeled_benchmark(
             for player_index in (1, 2, 3, 4)
         ]
         center_acc = float(pred_summary["center_card"] == true_summary["center_card"])
-        image_score = float(np.mean([center_acc] + player_f1s))
+        active_acc = float(pred_summary["active_player"] == true_summary["active_player"])
+        image_score = float(np.mean([center_acc, active_acc] + player_f1s))
 
         true_counts = {
             "center": 0 if true_summary["center_card"].upper() == "EMPTY" else 1,
@@ -476,12 +647,13 @@ def run_labeled_benchmark(
             "true_counts": true_counts,
             "pred_counts": pred_counts,
             "center_acc": center_acc,
+            "active_acc": active_acc,
             "p1_f1": player_f1s[0],
             "p2_f1": player_f1s[1],
             "p3_f1": player_f1s[2],
             "p4_f1": player_f1s[3],
             "image_score": image_score,
-            "image_score_strict": float(np.mean([center_acc] + player_f1s + [count_quality])),
+            "image_score_strict": float(np.mean([center_acc, active_acc] + player_f1s + [count_quality])),
             "true_card_count": true_card_count,
             "pred_card_count": pred_card_count,
             "card_count_diff": card_count_diff,
@@ -497,6 +669,7 @@ def run_labeled_benchmark(
         raise RuntimeError("Benchmark could not process any image.")
 
     center_acc = float(np.mean([result["center_acc"] for result in results]))
+    active_acc = float(np.mean([result["active_acc"] for result in results]))
     player_means = [float(np.mean([result[f"p{player_index}_f1"] for result in results])) for player_index in (1, 2, 3, 4)]
     macro_f1 = float(np.mean(player_means))
     overall = float(np.mean([result["image_score"] for result in results]))
@@ -509,17 +682,17 @@ def run_labeled_benchmark(
         weakest = ", ".join(f"{item['image_id']}={item['image_score']:.2f}" for item in worst_results) or "none"
         print(
             "Benchmark summary: "
-            f"center={center_acc:.3f}, player_macro={macro_f1:.3f}, "
+            f"center={center_acc:.3f}, active={active_acc:.3f}, player_macro={macro_f1:.3f}, "
             f"overall={overall:.3f}, strict={overall_strict:.3f}, "
             f"count_MAE={np.mean([result['abs_card_count_diff'] for result in results]):.2f}, "
             f"cards pred/true={sum(result['pred_card_count'] for result in results)}/{sum(result['true_card_count'] for result in results)}."
         )
         print(f"Weakest labelled images: {weakest}.")
-        print("Active player is emitted as EMPTY and not scored in this local benchmark.")
 
     benchmark = {
         "results": results,
         "center_acc": center_acc,
+        "active_acc": active_acc,
         "p1_f1": player_means[0],
         "p2_f1": player_means[1],
         "p3_f1": player_means[2],
@@ -546,9 +719,10 @@ def run_labeled_benchmark(
 
 def plot_benchmark_summary(benchmark: dict[str, object]) -> None:
     """Four-panel benchmark dashboard for the final report."""
-    metric_names = ["center", "p1", "p2", "p3", "p4", "macro", "overall"]
+    metric_names = ["center", "active", "p1", "p2", "p3", "p4", "macro", "overall"]
     metric_values = [
         float(benchmark["center_acc"]),
+        float(benchmark["active_acc"]),
         float(benchmark["p1_f1"]),
         float(benchmark["p2_f1"]),
         float(benchmark["p3_f1"]),
@@ -561,7 +735,7 @@ def plot_benchmark_summary(benchmark: dict[str, object]) -> None:
     bin_count = min(24, max(8, int(np.sqrt(len(image_scores)))))
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 9))
-    axes[0, 0].bar(metric_names, metric_values, color=["#4e79a7"] + ["#59a14f"] * 4 + ["#f28e2b", "#76b7b2"])
+    axes[0, 0].bar(metric_names, metric_values, color=["#4e79a7", "#edc948"] + ["#59a14f"] * 4 + ["#f28e2b", "#76b7b2"])
     axes[0, 0].set_ylim(0.0, 1.0)
     axes[0, 0].set_title("Structured-state scores")
     axes[0, 0].tick_params(axis="x", rotation=25)

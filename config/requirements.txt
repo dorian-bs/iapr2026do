@@ -12,3 +12,4 @@ torch>=2.1
 torchvision>=0.16
 jupyter
 ipykernel
+ipywidgets

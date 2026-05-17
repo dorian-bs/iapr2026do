@@ -89,7 +89,7 @@ the corresponding checks explicit at every stage.
 | R3 | Test set = inference only | Training notebooks operate on `training_data/` and challenge training assets; `main.py` only reads `test_images/`. |
 | R4 | ≤12M params per model | `assert_param_cap` runs on every model load (`src/inference.py`, training pipelines). |
 | R5 | Strict submission schema | `validate_row` in `src/inference.py` runs on every CSV row before writing. |
-| R6 | Fixed player geometry | `assign_region` in `src/inference.py` (p1=bottom, p2=right, p3=top, p4=left). |
+| R6 | Fixed player geometry | `assign_region` and `detect_active_player` in `src/inference.py` (p1=bottom, p2=right, p3=top, p4=left). |
 
 ## Pipeline overview
 
@@ -102,8 +102,9 @@ the corresponding checks explicit at every stage.
    network is forced to ignore background variation.
 4. **Region assignment** — geometric assignment of each box to `center` or one
    of `p1..p4` per R6.
-5. **Active player** — not predicted by the submitted pipeline yet; the CSV
-   writer emits the valid `EMPTY` sentinel.
+5. **Active player** — OpenCV token detection chooses the dark rectangular
+   marker on plain backgrounds or the yellow round marker on textured
+   backgrounds, then maps the marker center to the fixed player sectors.
 
 ## Final submission packaging
 

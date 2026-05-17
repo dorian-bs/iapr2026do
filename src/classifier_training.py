@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 import random
 import time
 from collections import Counter
@@ -39,11 +38,11 @@ class TrainPipelineConfig:
     mask_threshold: float = 0.50
     val_split: float = 0.20
 
+    stage_1_epochs: int = 2
     stage_2_epochs: int = 2
-    stage_3_epochs: int = 100
 
-    stage_2_lr: float = 1e-3
-    stage_3_lr: float = 3e-4
+    stage_1_lr: float = 1e-3
+    stage_2_lr: float = 3e-4
 
     weight_decay: float = 1e-4
     label_smoothing: float = 0.05
@@ -106,6 +105,31 @@ def _select_device() -> torch.device:
     if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
+
+
+def _format_seconds(seconds: float) -> str:
+    seconds = int(round(float(seconds)))
+    hours, rem = divmod(seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if hours:
+        return f"{hours:d}h {minutes:02d}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes:d}m {seconds:02d}s"
+    return f"{seconds:d}s"
+
+
+def _shutdown_loader_workers(loader: DataLoader | None) -> None:
+    if loader is None:
+        return
+    iterator = getattr(loader, "_iterator", None)
+    shutdown = getattr(iterator, "_shutdown_workers", None)
+    if callable(shutdown):
+        shutdown()
+    if iterator is not None:
+        try:
+            setattr(loader, "_iterator", None)
+        except Exception:
+            pass
 
 
 def _select_batch_size(device: torch.device, cfg: TrainPipelineConfig) -> int:
@@ -511,7 +535,9 @@ def initialize_training_pipeline(
     all_labels = sorted({sample.label for sample in augmented_card_samples + scene_manual_samples})
     label_to_index = {label: index for index, label in enumerate(all_labels)}
     pin_memory = device.type == "cuda"
-    effective_workers = 0 if os_name_is_windows() else int(cfg.num_workers)
+    if cfg.num_workers < 0:
+        raise ValueError(f"num_workers must be >= 0, got {cfg.num_workers}")
+    effective_workers = int(cfg.num_workers)
     common = dict(
         label_to_index=label_to_index,
         batch_size=batch_size,
@@ -536,9 +562,24 @@ def initialize_training_pipeline(
     model_params = assert_param_cap(model, f"CardClassifier[{cfg.classifier_architecture}]")
     ce_loss = nn.CrossEntropyLoss(label_smoothing=cfg.label_smoothing)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp) if device.type == "cuda" else None
-    print(f"Augmented-card samples: {len(augmented_card_samples)} (per_epoch={aug_per_epoch})")
-    print(f"Scene-manual train/val: {len(scene_train_samples)}/{len(scene_val_samples)} (per_epoch={scene_manual_per_epoch})")
-    print(f"Missing/skipped: aug={len(missing_aug)} scene={len(missing_scene)} | aug skip {skipped_aug_labels}/{skipped_aug_files}/{skipped_aug_masks} | scene skip {skipped_scene_labels}/{skipped_scene_boxes}/{skipped_scene_masks}")
+    print(
+        "Classifier data: "
+        f"augmented={len(augmented_card_samples):,} (per_epoch={aug_per_epoch:,}), "
+        f"scene_train={len(scene_train_samples):,} (per_epoch={scene_manual_per_epoch:,}), "
+        f"scene_val={len(scene_val_samples):,}, classes={len(all_labels):,}."
+    )
+    print(
+        "Classifier loader: "
+        f"batch_size={batch_size}, val_batches={len(val_loader):,}, workers={effective_workers}, "
+        f"persistent={bool(cfg.persistent_workers and effective_workers > 0)}, pin_memory={pin_memory}."
+    )
+    print(f"Classifier device: {device} | checkpoint: {classifier_bundle_dir / 'card_classifier.pth'}")
+    print(
+        "Missing/skipped: "
+        f"aug_missing={len(missing_aug)}, scene_missing={len(missing_scene)} | "
+        f"aug_skip labels/files/masks={skipped_aug_labels}/{skipped_aug_files}/{skipped_aug_masks} | "
+        f"scene_skip labels/boxes/masks={skipped_scene_labels}/{skipped_scene_boxes}/{skipped_scene_masks}"
+    )
     return {
         "config": cfg,
         "project_root": project_root,
@@ -548,6 +589,9 @@ def initialize_training_pipeline(
         "device": device,
         "use_amp": use_amp,
         "batch_size": batch_size,
+        "num_workers": effective_workers,
+        "pin_memory": pin_memory,
+        "persistent_workers": bool(cfg.persistent_workers and effective_workers > 0),
         "card_model_path": classifier_bundle_dir / "card_classifier.pth",
         "card_classes_path": classifier_bundle_dir / "classes.npy",
         "card_config_path": classifier_bundle_dir / "config.json",
@@ -566,10 +610,6 @@ def initialize_training_pipeline(
         "scaler": scaler,
         "history": [],
     }
-
-
-def os_name_is_windows() -> bool:
-    return os.name == "nt"
 
 
 def _selection_score_from_metrics(metrics: dict[str, float], cfg: TrainPipelineConfig) -> float:
@@ -684,8 +724,8 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
     device: torch.device = state["device"]
     use_amp: bool = state["use_amp"]
     stage_plan = [
-        ("stage2_augmented_cards", cfg.stage_2_epochs, state["augmented_card_samples"], state["augmented_samples_per_epoch"], cfg.stage_2_lr),
-        ("stage3_scene_manual_masks", cfg.stage_3_epochs, state["scene_train_samples"], state["scene_manual_samples_per_epoch"], cfg.stage_3_lr),
+        ("stage1_augmented_cards", cfg.stage_1_epochs, state["augmented_card_samples"], state["augmented_samples_per_epoch"], cfg.stage_1_lr),
+        ("stage2_scene_manual_masks", cfg.stage_2_epochs, state["scene_train_samples"], state["scene_manual_samples_per_epoch"], cfg.stage_2_lr),
     ]
     history: list[dict[str, float | int | str]] = []
     last_stage_best_score = -float("inf")
@@ -703,18 +743,24 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="max", factor=0.5, patience=2)
         stage_best_score = -float("inf")
         epochs_without_improvement = 0
-        print(f"\n[{stage_name}] epochs={stage_epochs}, lr={stage_lr:.2e}, dataset_samples={len(stage_samples)}, samples_per_epoch={samples_per_epoch}")
-        for epoch in range(1, stage_epochs + 1):
-            if samples_per_epoch < len(stage_samples):
-                rng = random.Random(cfg.seed + stage_index * 10_000 + epoch)
-                epoch_indices = rng.sample(range(len(stage_samples)), k=samples_per_epoch)
-                epoch_samples = [stage_samples[index] for index in epoch_indices]
-                epoch_samples_per_epoch = None
-            else:
-                epoch_samples = stage_samples
-                epoch_samples_per_epoch = samples_per_epoch
-            loader, _ = make_loader(
-                epoch_samples,
+        print(
+            f"\n[{stage_name}] epochs={stage_epochs}, lr={stage_lr:.2e}, "
+            f"dataset_samples={len(stage_samples):,}, samples_per_epoch={samples_per_epoch:,}, "
+            f"batch_size={state['batch_size']}, workers={state.get('num_workers', cfg.num_workers)}"
+        )
+        coverage_indices: list[int] | None = None
+        coverage_cursor = 0
+        coverage_rng: random.Random | None = None
+        if samples_per_epoch < len(stage_samples):
+            coverage_indices = list(range(len(stage_samples)))
+            coverage_rng = random.Random(cfg.seed + stage_index * 10_000)
+            coverage_rng.shuffle(coverage_indices)
+            print("  per-epoch cap active: cycling through the full stage sample pool before repeating")
+
+        reusable_loader: DataLoader | None = None
+        if samples_per_epoch >= len(stage_samples):
+            reusable_loader, _ = make_loader(
+                stage_samples,
                 state["label_to_index"],
                 state["batch_size"],
                 cfg.img_size,
@@ -723,14 +769,50 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 shuffle=True,
                 augment=True,
                 pin_memory=device.type == "cuda",
-                num_workers=0 if os_name_is_windows() else cfg.num_workers,
-                seed=cfg.seed + stage_index * 10_000 + epoch,
+                num_workers=state.get("num_workers", cfg.num_workers),
+                seed=cfg.seed + stage_index * 10_000,
                 balanced=cfg.balanced_sampling,
-                samples_per_epoch=epoch_samples_per_epoch,
+                samples_per_epoch=samples_per_epoch,
                 persistent_workers=cfg.persistent_workers,
             )
+        for epoch in range(1, stage_epochs + 1):
+            if reusable_loader is not None:
+                loader = reusable_loader
+            else:
+                if coverage_indices is None or coverage_rng is None:
+                    raise RuntimeError("Coverage sampler state was not initialized.")
+                selected_indices: list[int] = []
+                while len(selected_indices) < samples_per_epoch:
+                    remaining = len(coverage_indices) - coverage_cursor
+                    take = min(samples_per_epoch - len(selected_indices), remaining)
+                    selected_indices.extend(coverage_indices[coverage_cursor:coverage_cursor + take])
+                    coverage_cursor += take
+                    if coverage_cursor >= len(coverage_indices):
+                        coverage_rng.shuffle(coverage_indices)
+                        coverage_cursor = 0
+                epoch_samples = [stage_samples[index] for index in selected_indices]
+                loader, _ = make_loader(
+                    epoch_samples,
+                    state["label_to_index"],
+                    state["batch_size"],
+                    cfg.img_size,
+                    cfg.bbox_margin,
+                    cfg.mask_threshold,
+                    shuffle=True,
+                    augment=True,
+                    pin_memory=device.type == "cuda",
+                    num_workers=state.get("num_workers", cfg.num_workers),
+                    seed=cfg.seed + stage_index * 10_000 + epoch,
+                    balanced=cfg.balanced_sampling,
+                    samples_per_epoch=None,
+                    persistent_workers=cfg.persistent_workers,
+                )
             epoch_start = time.perf_counter()
-            train_metrics = _train_one_epoch(model, loader, optimizer, ce_loss, state["scaler"], use_amp, device, cfg)
+            try:
+                train_metrics = _train_one_epoch(model, loader, optimizer, ce_loss, state["scaler"], use_amp, device, cfg)
+            finally:
+                if loader is not reusable_loader:
+                    _shutdown_loader_workers(loader)
             val_metrics = _evaluate_one_epoch(model, state["val_loader"], ce_loss, use_amp, device)
             score = _selection_score_from_metrics(val_metrics, cfg)
             scheduler.step(score)
@@ -768,13 +850,16 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             history.append(row)
             print(
                 f"  epoch {epoch:03d}/{stage_epochs} | train_acc={train_metrics['cls_acc']*100:5.1f}% loss={train_metrics['loss']:.3f} | "
-                f"val={val_metrics['cls_acc']*100:5.1f}% top3={val_metrics['top3_acc']*100:5.1f}% macro_f1={val_metrics['macro_f1']:.3f} "
-                f"selection={score:.4f} lr={optimizer.param_groups[0]['lr']:.2e} time={epoch_seconds:.1f}s"
+                f"val_acc={val_metrics['cls_acc']*100:5.1f}% top3={val_metrics['top3_acc']*100:5.1f}% "
+                f"macro_f1={val_metrics['macro_f1']:.3f} bal_acc={val_metrics['balanced_acc']:.3f} | "
+                f"selection({cfg.best_epoch_selection_metric})={score:.4f} "
+                f"lr={optimizer.param_groups[0]['lr']:.2e} time={_format_seconds(epoch_seconds)}"
                 + (" | stage-best" if is_best else "")
             )
-            if stage_name == "stage3_scene_manual_masks" and epoch >= cfg.min_epochs_per_stage and epochs_without_improvement >= cfg.early_stop_patience:
+            if stage_index == len(stage_plan) and epoch >= cfg.min_epochs_per_stage and epochs_without_improvement >= cfg.early_stop_patience:
                 print(f"  [early-stop] {stage_name}: validation plateaued for {cfg.early_stop_patience} epochs")
                 break
+        _shutdown_loader_workers(reusable_loader)
     if last_stage_best_state is None:
         raise RuntimeError("Classifier training produced no checkpoint; all stages were disabled or empty.")
     model.load_state_dict(last_stage_best_state)
@@ -785,15 +870,22 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
     state["best_stage"] = last_stage_name
     state["best_epoch"] = last_stage_best_epoch
     state["training_seconds"] = time.perf_counter() - global_start
-    print(f"\nTraining complete. Selected {last_stage_name} epoch {last_stage_best_epoch} with val_acc={last_stage_best_acc*100:.2f}%")
+    _shutdown_loader_workers(state.get("val_loader"))
+    print("\nClassifier training complete.")
+    print(
+        f"Selected {last_stage_name} epoch {last_stage_best_epoch} | "
+        f"val_acc={last_stage_best_acc*100:.2f}% | "
+        f"selection({cfg.best_epoch_selection_metric})={last_stage_best_score:.4f} | "
+        f"total_time={_format_seconds(state['training_seconds'])}"
+    )
     return state
 
 
 def _stage_plan_summary(state: dict[str, Any]) -> list[dict[str, Any]]:
     cfg: TrainPipelineConfig = state["config"]
     entries = [
-        ("stage2_augmented_cards", cfg.stage_2_epochs, cfg.stage_2_lr, state["augmented_card_samples"], state["augmented_samples_per_epoch"]),
-        ("stage3_scene_manual_masks", cfg.stage_3_epochs, cfg.stage_3_lr, state["scene_train_samples"], state["scene_manual_samples_per_epoch"]),
+        ("stage1_augmented_cards", cfg.stage_1_epochs, cfg.stage_1_lr, state["augmented_card_samples"], state["augmented_samples_per_epoch"]),
+        ("stage2_scene_manual_masks", cfg.stage_2_epochs, cfg.stage_2_lr, state["scene_train_samples"], state["scene_manual_samples_per_epoch"]),
     ]
     return [
         {
@@ -1020,74 +1112,6 @@ def _annotate_bars(axis: plt.Axes, fmt: str = "{:.2f}") -> None:
             textcoords="offset points",
             fontsize=8,
         )
-
-
-def plot_classifier_audit(project_root: Path, summary: dict[str, Any], sample_count: int = 3, seed: int = 42) -> None:
-    """Single report figure for classifier curriculum, balance, and inputs."""
-    config = summary["config"]
-    stage_plan = summary["stage_plan"]
-    rows = summary["augmented_rows"]
-    sample_count = min(max(0, sample_count), 3, len(rows))
-
-    fig, axes = plt.subplots(
-        2,
-        3,
-        figsize=(16, 8),
-        gridspec_kw={"height_ratios": [1.0, 1.15]},
-        squeeze=False,
-    )
-
-    stage_labels = [str(stage["stage"]).replace("stage", "s") for stage in stage_plan]
-    samples = [int(stage.get("n_samples", 0)) for stage in stage_plan]
-    epochs = [int(stage.get("epochs", 0)) for stage in stage_plan]
-    x_positions = np.arange(len(stage_labels))
-    axes[0, 0].bar(x_positions, samples, color="#4e79a7", label="samples")
-    axes[0, 0].set_xticks(x_positions)
-    axes[0, 0].set_xticklabels(stage_labels, rotation=25, ha="right")
-    axes[0, 0].set_ylabel("Samples")
-    axes[0, 0].set_title("Training curriculum")
-    epoch_axis = axes[0, 0].twinx()
-    epoch_axis.plot(x_positions, epochs, color="#e15759", marker="o", linewidth=1.8, label="epochs")
-    epoch_axis.set_ylabel("Epochs")
-
-    metric_names = ["val acc", "selection"]
-    metric_values = [
-        float(config.get("best_val_accuracy", 0.0)),
-        float(config.get("best_selection_score", 0.0)),
-    ]
-    axes[0, 1].bar(metric_names, metric_values, color=["#59a14f", "#f28e2b"])
-    axes[0, 1].set_ylim(0, 1)
-    axes[0, 1].set_title(f"Saved checkpoint ({config.get('best_stage')}, epoch {config.get('best_epoch')})")
-    _annotate_bars(axes[0, 1])
-
-    class_counts = np.array([summary["augmented_class_counts"].get(name, 0) for name in summary["class_names"]], dtype=float)
-    axes[0, 2].hist(class_counts, bins=min(18, max(5, len(class_counts) // 3)), color="#af7aa1", edgecolor="white")
-    axes[0, 2].axvline(float(class_counts.mean()), color="black", linestyle="--", linewidth=1)
-    axes[0, 2].set_title("Augmented crops per class")
-    axes[0, 2].set_xlabel("Crops")
-    axes[0, 2].set_ylabel("Classes")
-
-    for axis in axes[1]:
-        axis.axis("off")
-    if sample_count:
-        rng = np.random.default_rng(seed)
-        indices = rng.choice(len(rows), size=sample_count, replace=False)
-        for col_index, source_index in enumerate(indices):
-            row = rows[int(source_index)]
-            image_bgr = cv2.imread(str(_card_image_path(Path(project_root), row["image_id"], row.get("image_path"))), cv2.IMREAD_COLOR)
-            mask = cv2.imread(str(_training_path(Path(project_root), row["mask_path"])), cv2.IMREAD_GRAYSCALE)
-            if image_bgr is None or mask is None:
-                continue
-            image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-            masked_rgb = image_rgb.copy()
-            masked_rgb[mask <= 0] = 128
-            axes[1, col_index].imshow(masked_rgb)
-            axes[1, col_index].set_title(f"Classifier input: {row['card']}", fontsize=9)
-            axes[1, col_index].axis("off")
-
-    fig.suptitle("Card-classifier audit", fontsize=13)
-    plt.tight_layout()
-    plt.show()
 
 
 def plot_classifier_training_summary(summary: dict[str, Any]) -> None:
