@@ -38,17 +38,17 @@ class SegmenterPipelineConfig:
     """Configuration used by the segmenter training notebook."""
 
     seed: int = 42
-    image_size: int = 256
-    val_split: float = 0.30
+    image_size: int = 512
+    val_split: float = 0.25
     max_scene_pairs: int | None = None
-    epoch_max_train_samples: int | None = 8192
+    epoch_max_train_samples: int | None = 4092
     cache_in_ram: bool = True
     num_workers: int = 4
     persistent_workers: bool = True
 
-    epochs: int = 40
+    epochs: int = 24
     batch_size: int = 8
-    learning_rate: float = 5e-4
+    learning_rate: float = 2e-4
     weight_decay: float = 1e-4
     train_loss_bce_weight: float = 0.5
     train_loss_dice_weight: float = 0.5
@@ -751,16 +751,26 @@ def plot_training_curves(state: dict[str, Any]) -> None:
         print("No segmenter training history to plot.")
         return
     epochs = np.arange(1, len(history["train_loss"]) + 1)
+    eps = 1e-6
+
+    train_loss = np.clip(np.asarray(history["train_loss"], dtype=np.float64), eps, None)
+    val_loss = np.clip(np.asarray(history["val_loss"], dtype=np.float64), eps, None)
+    train_iou_gap = np.clip(1.0 - np.asarray(history["train_iou"], dtype=np.float64), eps, 1.0)
+    val_iou_gap = np.clip(1.0 - np.asarray(history["val_iou"], dtype=np.float64), eps, 1.0)
+    val_dice_gap = np.clip(1.0 - np.asarray(history["val_dice"], dtype=np.float64), eps, 1.0)
+
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    axes[0].plot(epochs, history["train_loss"], label="train")
-    axes[0].plot(epochs, history["val_loss"], label="val")
-    axes[0].set_title("Loss")
+    axes[0].plot(epochs, train_loss, label="train")
+    axes[0].plot(epochs, val_loss, label="val")
+    axes[0].set_yscale("log")
+    axes[0].set_title("Loss (log scale)")
     axes[0].legend()
-    axes[1].plot(epochs, history["train_iou"], label="train IoU")
-    axes[1].plot(epochs, history["val_iou"], label="val IoU")
-    axes[1].plot(epochs, history["val_dice"], label="val Dice")
-    axes[1].set_ylim(0, 1)
-    axes[1].set_title("Overlap")
+    axes[1].plot(epochs, train_iou_gap, label="1 - train IoU")
+    axes[1].plot(epochs, val_iou_gap, label="1 - val IoU")
+    axes[1].plot(epochs, val_dice_gap, label="1 - val Dice")
+    axes[1].set_yscale("log")
+    axes[1].set_title("Overlap gap to 1.0 (log scale)")
+    axes[1].set_ylabel("1 - metric")
     axes[1].legend()
     axes[2].plot(epochs, history["val_count_mae"], label="count MAE")
     axes[2].plot(epochs, history["val_player_count_mae"], label="player MAE")
