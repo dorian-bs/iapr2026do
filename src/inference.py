@@ -49,8 +49,8 @@ LAYOUT_RATIOS = {
 @dataclass
 class InferenceConfig:
     segmenter_img_size: int = 256
-    segmenter_threshold: float = 0.70
-    segmenter_min_component_area: int | None = 5000
+    segmenter_threshold: float = 0.50
+    segmenter_min_component_area: int | None = 4000
     instance_mask_growth_px: int = 5
     card_img_size: int = 160
     card_mask_threshold: float = 0.50

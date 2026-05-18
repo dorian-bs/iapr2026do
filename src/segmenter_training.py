@@ -53,7 +53,7 @@ class SegmenterPipelineConfig:
     train_loss_bce_weight: float = 0.5
     train_loss_dice_weight: float = 0.5
     scheduler_factor: float = 0.5
-    scheduler_patience: int = 1
+    scheduler_patience: int = 2
 
     use_amp: bool = True
     use_torch_compile: bool = False
@@ -65,8 +65,8 @@ class SegmenterPipelineConfig:
     checkpoint_filename: str = "scene_segmenter_unet_small.pth"
 
     preview_count: int = 6
-    eval_mask_threshold: float = 0.7
-    eval_min_component_area: int | None = None
+    eval_mask_threshold: float = 0.5
+    eval_min_component_area: int | None = 4000
 
     best_epoch_selection_metric: str = "composite"
     selection_weight_iou: float = 0.24
@@ -206,14 +206,7 @@ class RotatingCoverageSampler(Sampler[int]):
 
     def __len__(self) -> int:
         return self.samples_per_epoch
-
-
-def _seed_loader_worker(worker_id: int) -> None:
-    worker_seed = torch.initial_seed() % 2**32
-    random.seed(worker_seed)
-    np.random.seed(worker_seed)
-    cv2.setNumThreads(0)
-
+    
 
 def dice_loss_from_logits(logits: torch.Tensor, targets: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     probs = torch.sigmoid(logits).reshape(-1)
@@ -923,17 +916,26 @@ def plot_training_curves(state: dict[str, Any]) -> None:
         print("No segmenter training history to plot.")
         return
     epochs = np.arange(1, len(history["train_loss"]) + 1)
+    eps = 1e-6
+
+    train_loss = np.clip(np.asarray(history["train_loss"], dtype=np.float64), eps, None)
+    val_loss = np.clip(np.asarray(history["val_loss"], dtype=np.float64), eps, None)
+    train_iou_gap = np.clip(1.0 - np.asarray(history["train_iou"], dtype=np.float64), eps, 1.0)
+    val_iou_gap = np.clip(1.0 - np.asarray(history["val_iou"], dtype=np.float64), eps, 1.0)
+    val_dice_gap = np.clip(1.0 - np.asarray(history["val_dice"], dtype=np.float64), eps, 1.0)
+
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    axes[0].plot(epochs, history["train_loss"], label="train")
-    axes[0].plot(epochs, history["val_loss"], label="val")
-    axes[0].set_title("Loss")
+    axes[0].plot(epochs, train_loss, label="train")
+    axes[0].plot(epochs, val_loss, label="val")
+    axes[0].set_yscale("log")
+    axes[0].set_title("Loss (log scale)")
     axes[0].legend()
-    axes[1].plot(epochs, history["train_iou"], label="train IoU")
-    axes[1].plot(epochs, history["val_iou"], label="val IoU")
-    axes[1].plot(epochs, history["val_dice"], label="val Dice")
-    axes[1].set_ylim(0, 1)
-    axes[1].set_title("Overlap")
-    axes[1].legend()
+    axes[1].plot(epochs, train_iou_gap, label="1 - train IoU")
+    axes[1].plot(epochs, val_iou_gap, label="1 - val IoU")
+    axes[1].plot(epochs, val_dice_gap, label="1 - val Dice")
+    axes[1].set_yscale("log")
+    axes[1].set_title("Overlap gap to 1.0 (log scale)")
+    axes[1].set_ylabel("1 - metric")
     axes[2].plot(epochs, history["val_count_mae"], label="count MAE")
     axes[2].plot(epochs, history["val_player_count_mae"], label="player MAE")
     axes[2].set_title("Count errors")

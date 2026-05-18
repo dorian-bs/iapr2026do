@@ -59,7 +59,7 @@ class CreateAugmentedDataConfig:
     scene_height: int = 720
     min_cards_per_player: int = 0
     max_cards_per_player: int = 6
-    mask_gap_pixels: int = 7
+    mask_gap_pixels: int = 6
     min_visible_card_area: int = 90
     clear_output_dirs: bool = True
 
@@ -69,12 +69,12 @@ class CreateAugmentedDataConfig:
     player_hand_center_jitter_fraction_range: tuple[float, float] = (0.006, 0.020)
     player_slot_offset_jitter_fraction_range: tuple[float, float] = (0.05, 0.20)
     player_inward_jitter_fraction_range: tuple[float, float] = (0.008, 0.030)
-    player_rotation_jitter_deg_range: tuple[float, float] = (0.5, 45.0)
+    player_rotation_jitter_deg_range: tuple[float, float] = (0.5, 50.0)
     center_position_fraction_range_x: tuple[float, float] = (0.40, 0.70)
     center_position_fraction_range_y: tuple[float, float] = (0.40, 0.70)
     center_angle_range_deg: tuple[float, float] = (-70.0, 70.0)
     scene_image_format: str = "jpg"
-    scene_jpeg_quality: int = 80
+    scene_jpeg_quality: int = 75
     scene_generation_workers: int = 0
     scene_generation_backend: str = "process"
     scene_generation_chunk_size: int = 16
