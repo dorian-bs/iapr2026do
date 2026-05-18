@@ -19,6 +19,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import to_rgba
 from matplotlib.patches import Patch, Polygon, Rectangle
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from src.inference import predict_from_path
 
 from src.inference import (
     assign_region,
@@ -107,7 +111,7 @@ def plot_pipeline_stages(
     axes[1].set_title(f"(2) Segmenter probability\nthreshold={engine.config.segmenter_threshold:.2f}")
 
     axes[2].imshow(instance_map)
-    axes[2].set_title(f"(3) Per-card instance masks\ngrowth=+{engine.config.instance_mask_growth_px}px and small region removal")
+    axes[2].set_title(f"(3) Per-card instance masks\ngrowth=+{engine.config.instance_mask_growth_px}px")
 
     axes[3].imshow(img_rgb)
     for pred in predictions:
@@ -783,7 +787,7 @@ def plot_benchmark_examples(
     engine: InferenceEngine | None = None,
     cols: int | None = None,
 ) -> None:
-    """Qualitative benchmark rows: annotated prediction beside classifier masks.
+    """Qualitative benchmark rows: annotated prediction beside predicted mask.
 
     `cols` is kept for older notebook calls; the report layout is fixed at two columns.
     """
@@ -833,27 +837,144 @@ def plot_benchmark_examples(
         )
         image_axis.axis("off")
 
-        # Use the exact per-card instance masks carried by predictions.
-        # These are the masks used by classifier crops after growth/dilation.
-        instance_map = np.zeros(image_bgr.shape[:2], dtype=np.uint16)
-        for pred_index, pred in enumerate(predictions, start=1):
-            instance_map[pred.instance_mask > 0] = pred_index
-
-        growth = f", growth=+{engine.config.instance_mask_growth_px}px" if engine is not None else ""
-        if predictions:
-            if len(predictions) == 1:
-                mask_axis.imshow(instance_map > 0, cmap="gray", vmin=0, vmax=1)
-            else:
-                cmap = plt.get_cmap("tab20", len(predictions) + 1)
-                mask_axis.imshow(instance_map, cmap=cmap, vmin=0, vmax=len(predictions))
-            mask_title = f"Dilated predicted masks"
+        mask_title = "Predicted mask"
+        if engine is not None:
+            probability = segment_scene_probability(
+                image_bgr,
+                engine.segmenter,
+                engine.device,
+                target_size=engine.config.segmenter_img_size,
+            )
+            _, predicted_mask = boxes_from_probability(
+                probability,
+                threshold=engine.config.segmenter_threshold,
+                min_component_area=engine.config.segmenter_min_component_area,
+                instance_mask_growth_px=engine.config.instance_mask_growth_px,
+            )
+            mask_title = f"Predicted mask (threshold={engine.config.segmenter_threshold:.2f})"
         else:
-            mask_axis.imshow(instance_map, cmap="gray", vmin=0, vmax=1)
-            mask_title = f"Dilated predicted masks"
+            predicted_mask = np.zeros(image_bgr.shape[:2], dtype=np.uint8)
+            for pred in predictions:
+                predicted_mask[pred.instance_mask > 0] = 1
 
+        mask_axis.imshow(predicted_mask, cmap="gray", vmin=0, vmax=1)
         mask_axis.set_title(mask_title, fontsize=9)
         mask_axis.axis("off")
 
     fig.suptitle(title, fontsize=12)
     plt.tight_layout()
     plt.show()
+
+########## Interpretability visualizations ##########
+
+def get_classifier_model(engine):
+    """Dynamically extracts the classifier nn.Module from the inference engine."""
+    classifier_model = None
+    for attr_name in dir(engine):
+        attr = getattr(engine, attr_name, None)
+        if isinstance(attr, torch.nn.Module) and "classifier" in attr_name.lower():
+            classifier_model = attr
+            break
+            
+    if classifier_model is None:
+        for attr_name in dir(engine):
+            attr = getattr(engine, attr_name, None)
+            if isinstance(attr, torch.nn.Module) and "segment" not in attr_name.lower():
+                classifier_model = attr
+                break
+                
+    if classifier_model is None:
+        raise ValueError("Could not find the classifier network within the 'engine' object.")
+    return classifier_model
+
+
+def run_saliency_pipeline(engine, image_path):
+    """
+    Runs inference on an image path while attaching a forward hook 
+    to capture 4-channel classifier inputs, then computes saliency maps.
+    """
+    img_path = Path(image_path)
+    if not img_path.exists():
+        raise FileNotFoundError(f"Could not find the specified image at: {img_path.resolve()}")
+        
+    classifier_model = get_classifier_model(engine)
+    
+    captured_inputs = []
+    captured_predictions = []
+
+    def hook_fn(module, field_input, field_output):
+        if len(field_input) > 0:
+            captured_inputs.append(field_input[0].detach().cpu())
+        captured_predictions.append(field_output.detach().cpu())
+
+    # Register hook, run complete inference pipeline, and guarantee removal
+    hook_handle = classifier_model.register_forward_hook(hook_fn)
+    print(f"Processing image: {img_path.name}")
+    try:
+        _ = predict_from_path(engine, img_path)
+    finally:
+        hook_handle.remove()
+
+    print(f"Successfully processed scene! Detected {len(captured_inputs)} card components.")
+    
+    classifier_model.eval()
+    device = next(classifier_model.parameters()).device
+    saliency_results = []
+
+    # Compute feature importances via backpropagation gradients
+    for idx, (inp, out) in enumerate(zip(captured_inputs, captured_predictions)):
+        inp_var = inp.clone().requires_grad_(True)
+        
+        with torch.set_grad_enabled(True):
+            logits = classifier_model(inp_var.to(device))
+            pred_class = logits.argmax(dim=1).item()
+            score = logits[0, pred_class]
+            score.backward()
+            
+        saliency = inp_var.grad.cpu().numpy()[0]   # (4, H, W)
+        input_np = inp.numpy()[0]                  # (4, H, W)
+        
+        # Max absolute gradient across RGB, and absolute gradient for the Mask channel
+        rgb_saliency = np.max(np.abs(saliency[:3]), axis=0)
+        mask_saliency = np.abs(saliency[3])
+        
+        # Normalize input crop back to [0, 1] for visual plotting
+        rgb_img = input_np[:3].transpose(1, 2, 0)
+        rgb_img = (rgb_img - rgb_img.min()) / (rgb_img.max() - rgb_img.min() + 1e-8)
+        mask_img = input_np[3]
+        
+        saliency_results.append({
+            'card_idx': idx,
+            'pred_class': pred_class,
+            'rgb_img': rgb_img,
+            'mask_img': mask_img,
+            'rgb_saliency': rgb_saliency,
+            'mask_saliency': mask_saliency
+        })
+        
+    return saliency_results
+
+
+def plot_saliency_dashboard(saliency_results):
+    """Plots a 4-column feature-importance visualization dashboard for every card."""
+    for res in saliency_results:
+        fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+        
+        axes[0].imshow(res['rgb_img'])
+        axes[0].set_title(f"Card #{res['card_idx']} - Isolated Crop\nPredicted Class: {res['pred_class']}")
+        axes[0].axis('off')
+        
+        axes[1].imshow(res['mask_img'], cmap='gray')
+        axes[1].set_title("Fed Mask Channel")
+        axes[1].axis('off')
+        
+        axes[2].imshow(res['rgb_saliency'], cmap='hot')
+        axes[2].set_title("RGB Feature Importance\n(Numbers/Symbols/Colors)")
+        axes[2].axis('off')
+        
+        axes[3].imshow(res['mask_saliency'], cmap='hot')
+        axes[3].set_title("Mask Feature Importance\n(Overlap boundaries)")
+        axes[3].axis('off')
+        
+        plt.tight_layout()
+        plt.show()

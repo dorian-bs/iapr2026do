@@ -41,7 +41,7 @@
   "stage_plan": [
     {
       "stage": "stage1_augmented_cards",
-      "epochs": 6,
+      "epochs": 2,
       "learning_rate": 0.001,
       "n_samples": 27000,
       "samples_per_epoch": 4096
@@ -50,7 +50,7 @@
       "stage": "stage2_scene_manual_masks",
       "epochs": 120,
       "learning_rate": 0.0003,
-      "n_samples": 84856,
+      "n_samples": 127572,
       "samples_per_epoch": 4096
     }
   ],
@@ -111,10 +111,10 @@
     "y_reverse",
     "y_skip"
   ],
-  "validation_samples": 21415,
-  "best_val_accuracy": 0.8746205930422601,
+  "validation_samples": 32344,
+  "best_val_accuracy": 0.8564494187484541,
   "best_stage": "stage2_scene_manual_masks",
-  "best_epoch": 98,
+  "best_epoch": 85,
   "trainable_params": 9853134,
   "seed": 42
 }

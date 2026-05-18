@@ -40,11 +40,11 @@ class CreateAugmentedDataConfig:
 
     seed: int = 67
 
-    n_aug_per_reference: int = 500
+    n_aug_per_reference: int = 1000
     aug_card_canvas: tuple[int, int] = (256, 256)
-    aug_card_height_range: tuple[int, int] = (120, 320)
+    aug_card_height_range: tuple[int, int] = (140, 220)
     aug_card_angle_range_deg: tuple[float, float] = (-25.0, 25.0)
-    aug_card_shift_fraction: float = 0.15
+    aug_card_shift_fraction: float = 0.12
     aug_card_background_fill: int = 128
     aug_card_image_format: str = "jpg"
     aug_card_jpeg_quality: int = 80
@@ -52,7 +52,7 @@ class CreateAugmentedDataConfig:
     aug_card_generation_backend: str = "thread"
     aug_card_generation_chunk_size: int = 32
 
-    n_scenes: int = 8192
+    n_scenes: int = 12288
     scene_width: int = 1280
     scene_height: int = 720
     min_cards_per_player: int = 0
@@ -72,7 +72,7 @@ class CreateAugmentedDataConfig:
     center_position_fraction_range_y: tuple[float, float] = (0.40, 0.70)
     center_angle_range_deg: tuple[float, float] = (-70.0, 70.0)
     scene_image_format: str = "jpg"
-    scene_jpeg_quality: int = 75
+    scene_jpeg_quality: int = 80
     scene_generation_workers: int = 0
     scene_generation_backend: str = "process"
     scene_generation_chunk_size: int = 16
