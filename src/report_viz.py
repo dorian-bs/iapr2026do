@@ -107,7 +107,7 @@ def plot_pipeline_stages(
     axes[1].set_title(f"(2) Segmenter probability\nthreshold={engine.config.segmenter_threshold:.2f}")
 
     axes[2].imshow(instance_map)
-    axes[2].set_title(f"(3) Per-card instance masks\ngrowth=+{engine.config.instance_mask_growth_px}px and small region removal")
+    axes[2].set_title(f"(3) Per-card instance masks\ngrowth=+{engine.config.instance_mask_growth_px}px")
 
     axes[3].imshow(img_rgb)
     for pred in predictions:
@@ -783,7 +783,7 @@ def plot_benchmark_examples(
     engine: InferenceEngine | None = None,
     cols: int | None = None,
 ) -> None:
-    """Qualitative benchmark rows: annotated prediction beside classifier masks.
+    """Qualitative benchmark rows: annotated prediction beside predicted mask.
 
     `cols` is kept for older notebook calls; the report layout is fixed at two columns.
     """
@@ -833,24 +833,27 @@ def plot_benchmark_examples(
         )
         image_axis.axis("off")
 
-        # Use the exact per-card instance masks carried by predictions.
-        # These are the masks used by classifier crops after growth/dilation.
-        instance_map = np.zeros(image_bgr.shape[:2], dtype=np.uint16)
-        for pred_index, pred in enumerate(predictions, start=1):
-            instance_map[pred.instance_mask > 0] = pred_index
-
-        growth = f", growth=+{engine.config.instance_mask_growth_px}px" if engine is not None else ""
-        if predictions:
-            if len(predictions) == 1:
-                mask_axis.imshow(instance_map > 0, cmap="gray", vmin=0, vmax=1)
-            else:
-                cmap = plt.get_cmap("tab20", len(predictions) + 1)
-                mask_axis.imshow(instance_map, cmap=cmap, vmin=0, vmax=len(predictions))
-            mask_title = f"Dilated predicted masks"
+        mask_title = "Predicted mask"
+        if engine is not None:
+            probability = segment_scene_probability(
+                image_bgr,
+                engine.segmenter,
+                engine.device,
+                target_size=engine.config.segmenter_img_size,
+            )
+            _, predicted_mask = boxes_from_probability(
+                probability,
+                threshold=engine.config.segmenter_threshold,
+                min_component_area=engine.config.segmenter_min_component_area,
+                instance_mask_growth_px=engine.config.instance_mask_growth_px,
+            )
+            mask_title = f"Predicted mask (threshold={engine.config.segmenter_threshold:.2f})"
         else:
-            mask_axis.imshow(instance_map, cmap="gray", vmin=0, vmax=1)
-            mask_title = f"Dilated predicted masks"
+            predicted_mask = np.zeros(image_bgr.shape[:2], dtype=np.uint8)
+            for pred in predictions:
+                predicted_mask[pred.instance_mask > 0] = 1
 
+        mask_axis.imshow(predicted_mask, cmap="gray", vmin=0, vmax=1)
         mask_axis.set_title(mask_title, fontsize=9)
         mask_axis.axis("off")
 
