@@ -16,16 +16,10 @@ training_data/augmented_data/**/*.png
 training_data/reference_manual_masks/*.afphoto
 
 # ignore models
-models/**/**.pth
-models/**/**.npy
-models/**/**.json
-
-# ignore classifiers
-*.pkl
-
+models/card_classifier_cnn/backup
+models/segmenter/backup/
 
 # ignore dorian's files
-projodo/
 *.DS_Store
 .old/
 project/
