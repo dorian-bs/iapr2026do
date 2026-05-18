@@ -23,6 +23,7 @@ from src.classifier_training import (  # noqa: E402
     _selection_score_from_metrics,
     initialize_training_pipeline,
     make_loader,
+    make_rotating_loader,
 )
 
 
@@ -165,6 +166,107 @@ def _profile_train_epoch(
     }
 
 
+def _profile_train_existing_loader(
+    state: dict[str, Any],
+    loader: torch.utils.data.DataLoader,
+    optimizer: torch.optim.Optimizer,
+    stage_name: str,
+) -> dict[str, float]:
+    cfg: ClassifierPipelineConfig = state["config"]
+    device: torch.device = state["device"]
+    model: nn.Module = state["model"]
+    ce_loss: nn.Module = state["ce_loss"]
+    use_amp: bool = state["use_amp"]
+    scaler = state["scaler"]
+
+    model.train()
+    loss_sum = 0.0
+    true_labels: list[int] = []
+    pred_labels: list[int] = []
+    top3_hits = 0
+    confidences: list[float] = []
+
+    iterator_start = time.perf_counter()
+    iterator = iter(loader)
+    iterator_create_seconds = time.perf_counter() - iterator_start
+
+    data_wait_seconds = 0.0
+    transfer_seconds = 0.0
+    compute_seconds = 0.0
+    metric_seconds = 0.0
+    first_batch_wait_seconds = 0.0
+    batches = 0
+
+    total_start = time.perf_counter()
+    while True:
+        data_start = time.perf_counter()
+        try:
+            images, targets = next(iterator)
+        except StopIteration:
+            break
+        data_elapsed = time.perf_counter() - data_start
+        data_wait_seconds += data_elapsed
+        if batches == 0:
+            first_batch_wait_seconds = data_elapsed
+
+        transfer_start = time.perf_counter()
+        images = images.to(device, non_blocking=True)
+        targets = targets.to(device, non_blocking=True)
+        _sync(device)
+        transfer_seconds += time.perf_counter() - transfer_start
+
+        compute_start = time.perf_counter()
+        optimizer.zero_grad(set_to_none=True)
+        with torch.amp.autocast(device_type="cuda", enabled=use_amp):
+            logits = model(images)
+            loss = ce_loss(logits, targets)
+        if scaler is not None and use_amp:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            if cfg.grad_clip_norm > 0:
+                nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip_norm)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            if cfg.grad_clip_norm > 0:
+                nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip_norm)
+            optimizer.step()
+        _sync(device)
+        compute_seconds += time.perf_counter() - compute_start
+
+        metric_start = time.perf_counter()
+        probs = torch.softmax(logits.detach(), dim=1)
+        pred = probs.argmax(dim=1)
+        topk = torch.topk(probs, k=min(3, probs.shape[1]), dim=1).indices
+        batch_size = int(targets.shape[0])
+        loss_sum += float(loss.item()) * batch_size
+        true_labels.extend(targets.cpu().tolist())
+        pred_labels.extend(pred.cpu().tolist())
+        top3_hits += int((topk == targets[:, None]).any(dim=1).sum().item())
+        confidences.extend(probs.max(dim=1).values.cpu().tolist())
+        _sync(device)
+        metric_seconds += time.perf_counter() - metric_start
+        batches += 1
+
+    total_seconds = time.perf_counter() - total_start
+    metrics = _classification_metrics(loss_sum, len(true_labels), true_labels, pred_labels, top3_hits, confidences)
+    return {
+        "stage": stage_name,
+        "samples": float(len(true_labels)),
+        "batches": float(batches),
+        "iterator_create_seconds": iterator_create_seconds,
+        "first_batch_wait_seconds": first_batch_wait_seconds,
+        "data_wait_seconds": data_wait_seconds,
+        "transfer_seconds": transfer_seconds,
+        "compute_seconds": compute_seconds,
+        "metric_seconds": metric_seconds,
+        "total_loop_seconds": total_seconds,
+        "train_loss": float(metrics["loss"]),
+        "train_acc": float(metrics["cls_acc"]),
+    }
+
+
 @torch.no_grad()
 def _profile_validation(state: dict[str, Any]) -> dict[str, float]:
     cfg: ClassifierPipelineConfig = state["config"]
@@ -271,6 +373,9 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--skip-validation", action="store_true")
+    parser.add_argument("--repeat-train-epochs", type=int, default=1)
+    parser.add_argument("--reuse-rotating-loader", action="store_true")
+    parser.add_argument("--repeat-validation", type=int, default=1)
     args = parser.parse_args()
 
     cfg_kwargs: dict[str, Any] = {
@@ -292,11 +397,37 @@ def main() -> None:
 
     print(f"\nProfile setup: stage={stage_name}, requested_samples={args.samples}, used_samples={samples_per_epoch}, workers={args.workers}, batch_size={state['batch_size']}, device={device}")
     print(f"Initialization time: {init_seconds:.3f}s")
-    train_timings = _profile_train_epoch(state, samples, stage_name, samples_per_epoch, args.workers)
-    _print_timing("Train epoch timing", train_timings)
+    if args.reuse_rotating_loader:
+        loader, _ = make_rotating_loader(
+            samples,
+            state["label_to_index"],
+            state["batch_size"],
+            cfg.img_size,
+            cfg.bbox_margin,
+            cfg.mask_threshold,
+            augment=True,
+            pin_memory=device.type == "cuda",
+            num_workers=args.workers,
+            seed=cfg.seed + 99_123,
+            samples_per_epoch=samples_per_epoch,
+            persistent_workers=cfg.persistent_workers,
+            cache_scene_assets=cfg.cache_scene_assets,
+            cache_max_scene_assets=cfg.cache_max_scene_assets,
+        )
+        optimizer = torch.optim.AdamW(state["model"].parameters(), lr=cfg.stage_2_lr, weight_decay=cfg.weight_decay)
+        try:
+            for epoch_index in range(1, max(1, args.repeat_train_epochs) + 1):
+                train_timings = _profile_train_existing_loader(state, loader, optimizer, stage_name)
+                _print_timing(f"Train epoch timing (persistent loader pass {epoch_index})", train_timings)
+        finally:
+            _shutdown_loader_workers(loader)
+    else:
+        train_timings = _profile_train_epoch(state, samples, stage_name, samples_per_epoch, args.workers)
+        _print_timing("Train epoch timing", train_timings)
     if not args.skip_validation:
-        val_timings = _profile_validation(state)
-        _print_timing("Validation timing", val_timings)
+        for validation_index in range(1, max(1, args.repeat_validation) + 1):
+            val_timings = _profile_validation(state)
+            _print_timing(f"Validation timing (pass {validation_index})", val_timings)
     _shutdown_loader_workers(state.get("val_loader"))
 
 

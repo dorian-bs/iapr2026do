@@ -19,7 +19,7 @@ import torchvision.transforms.functional as TF
 from matplotlib.patches import Rectangle
 from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset, RandomSampler, SubsetRandomSampler
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 from src.inference import (
     IMAGENET_MEAN,
@@ -47,7 +47,7 @@ class SegmenterPipelineConfig:
     persistent_workers: bool = True
 
     epochs: int = 25
-    batch_size: int = 4
+    batch_size: int = 8
     learning_rate: float = 5e-4
     weight_decay: float = 1e-4
     train_loss_bce_weight: float = 0.5
@@ -175,6 +175,43 @@ class SceneSegDataset(Dataset):
                 image_t = TF.vflip(image_t)
                 mask_t = TF.vflip(mask_t)
         return image_t, mask_t
+
+
+class RotatingCoverageSampler(Sampler[int]):
+    def __init__(self, dataset_size: int, samples_per_epoch: int, seed: int, shuffle_epoch: bool = True):
+        if dataset_size <= 0:
+            raise ValueError("dataset_size must be positive")
+        self.dataset_size = int(dataset_size)
+        self.samples_per_epoch = int(min(max(1, samples_per_epoch), dataset_size))
+        self.shuffle_epoch = bool(shuffle_epoch)
+        self._rng = random.Random(seed)
+        self._indices = list(range(self.dataset_size))
+        self._rng.shuffle(self._indices)
+        self._cursor = 0
+
+    def __iter__(self):
+        selected: list[int] = []
+        while len(selected) < self.samples_per_epoch:
+            remaining = self.dataset_size - self._cursor
+            take = min(self.samples_per_epoch - len(selected), remaining)
+            selected.extend(self._indices[self._cursor:self._cursor + take])
+            self._cursor += take
+            if self._cursor >= self.dataset_size:
+                self._rng.shuffle(self._indices)
+                self._cursor = 0
+        if self.shuffle_epoch:
+            self._rng.shuffle(selected)
+        return iter(selected)
+
+    def __len__(self) -> int:
+        return self.samples_per_epoch
+
+
+def _seed_loader_worker(worker_id: int) -> None:
+    worker_seed = torch.initial_seed() % 2**32
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+    cv2.setNumThreads(0)
 
 
 def dice_loss_from_logits(logits: torch.Tensor, targets: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
@@ -440,13 +477,14 @@ def initialize_segmenter_pipeline(
     if cfg.epoch_max_train_samples is not None:
         epoch_train_samples = min(int(cfg.epoch_max_train_samples), len(train_ds))
         if epoch_train_samples < len(train_ds):
-            generator = torch.Generator().manual_seed(cfg.seed)
-            train_sampler = RandomSampler(train_ds, replacement=False, num_samples=epoch_train_samples, generator=generator)
-            print(f"Per-epoch train cap: {epoch_train_samples}/{len(train_ds)} samples")
+            train_sampler = RotatingCoverageSampler(len(train_ds), epoch_train_samples, seed=cfg.seed, shuffle_epoch=True)
+            print(f"Per-epoch train cap: {epoch_train_samples}/{len(train_ds)} samples; cycling through the full train pool")
     loader_kwargs: dict[str, Any] = {
         "batch_size": int(cfg.batch_size),
         "num_workers": effective_workers,
         "pin_memory": device.type == "cuda",
+        "worker_init_fn": _seed_loader_worker if effective_workers > 0 else None,
+        "generator": torch.Generator().manual_seed(cfg.seed),
     }
     if effective_workers > 0:
         loader_kwargs["persistent_workers"] = bool(cfg.persistent_workers)
@@ -549,13 +587,6 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     best_epoch = 0
     epochs_without_improvement = 0
     start = time.perf_counter()
-    coverage_indices: list[int] | None = None
-    coverage_cursor = 0
-    coverage_rng: random.Random | None = None
-    if epoch_train_samples < len(train_ds):
-        coverage_indices = list(range(len(train_ds)))
-        coverage_rng = random.Random(cfg.seed)
-        coverage_rng.shuffle(coverage_indices)
 
     print(
         f"\n[segmenter] epochs={cfg.epochs}, lr={cfg.learning_rate:.2e}, "
@@ -568,40 +599,21 @@ def run_segmenter_training(state: dict[str, Any]) -> dict[str, Any]:
     for epoch in range(1, cfg.epochs + 1):
         epoch_start = time.perf_counter()
         current_train_loader = train_loader
-        if epoch_train_samples < len(train_ds):
-            if coverage_indices is None or coverage_rng is None:
-                raise RuntimeError("Coverage sampler state is missing.")
-            selected: list[int] = []
-            while len(selected) < epoch_train_samples:
-                remaining = len(coverage_indices) - coverage_cursor
-                take = min(epoch_train_samples - len(selected), remaining)
-                selected.extend(coverage_indices[coverage_cursor:coverage_cursor + take])
-                coverage_cursor += take
-                if coverage_cursor >= len(coverage_indices):
-                    coverage_rng.shuffle(coverage_indices)
-                    coverage_cursor = 0
-            generator = torch.Generator().manual_seed(cfg.seed + epoch)
-            sampler = SubsetRandomSampler(selected, generator=generator)
-            current_train_loader = DataLoader(train_ds, shuffle=False, sampler=sampler, **state["train_loader_kwargs"])
 
         train_start = time.perf_counter()
-        try:
-            train_loss, train_iou, n_train = _train_one_epoch(
-                model,
-                current_train_loader,
-                optimizer,
-                bce_loss,
-                scaler,
-                state["use_amp"],
-                device,
-                bce_weight,
-                dice_weight,
-                cfg.log_every_batches,
-                state["channels_last"],
-            )
-        finally:
-            if current_train_loader is not train_loader:
-                _shutdown_loader_workers(current_train_loader)
+        train_loss, train_iou, n_train = _train_one_epoch(
+            model,
+            current_train_loader,
+            optimizer,
+            bce_loss,
+            scaler,
+            state["use_amp"],
+            device,
+            bce_weight,
+            dice_weight,
+            cfg.log_every_batches,
+            state["channels_last"],
+        )
         train_seconds = time.perf_counter() - train_start
         val_start = time.perf_counter()
         val_metrics = _evaluate(

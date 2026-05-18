@@ -5,7 +5,7 @@ import csv
 import json
 import random
 import time
-from collections import Counter
+from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import balanced_accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset, RandomSampler, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset, RandomSampler, Sampler, WeightedRandomSampler
 
 from src.inference import (
     IMAGENET_MEAN,
@@ -56,6 +56,8 @@ class ClassifierPipelineConfig:
     batch_size_cpu: int = 8
     num_workers: int = 4
     persistent_workers: bool = True
+    cache_scene_assets: bool = True
+    cache_max_scene_assets: int = 128
 
     augmented_target_gpu_mps: int = 4096
     augmented_target_cpu: int = 1536
@@ -410,6 +412,8 @@ class CardMaskedDataset(Dataset):
         bbox_margin: float,
         mask_threshold: float,
         augment: bool,
+        cache_scene_assets: bool = True,
+        cache_max_scene_assets: int = 128,
     ):
         self.samples = samples
         self.label_to_index = label_to_index
@@ -417,18 +421,90 @@ class CardMaskedDataset(Dataset):
         self.bbox_margin = bbox_margin
         self.mask_threshold = mask_threshold
         self.augment = augment
+        self.cache_scene_assets = bool(cache_scene_assets)
+        self.cache_max_scene_assets = max(0, int(cache_max_scene_assets))
+        self._scene_image_cache: OrderedDict[Path, np.ndarray] = OrderedDict()
+        self._scene_mask_cache: OrderedDict[Path, np.ndarray] = OrderedDict()
 
     def __len__(self) -> int:
         return len(self.samples)
 
+    def _read_scene_cached(self, path: Path, flags: int, cache: OrderedDict[Path, np.ndarray]) -> np.ndarray:
+        if self.cache_scene_assets and self.cache_max_scene_assets > 0:
+            cached = cache.get(path)
+            if cached is not None:
+                cache.move_to_end(path)
+                return cached
+        array = cv2.imread(str(path), flags)
+        if array is None:
+            raise FileNotFoundError(f"Cannot read image: {path}")
+        if self.cache_scene_assets and self.cache_max_scene_assets > 0:
+            cache[path] = array
+            cache.move_to_end(path)
+            while len(cache) > self.cache_max_scene_assets:
+                cache.popitem(last=False)
+        return array
+
+    def _sample_to_crop_and_mask(self, sample: CardSample) -> tuple[np.ndarray, np.ndarray]:
+        if sample.stage != "scene_manual":
+            return sample_to_crop_and_mask(sample, self.bbox_margin, self.mask_threshold)
+        if sample.scene_mask_path is None or sample.bbox is None:
+            raise ValueError("scene_manual sample requires bbox and scene_mask_path")
+        image_bgr = self._read_scene_cached(sample.image_path, cv2.IMREAD_COLOR, self._scene_image_cache)
+        scene_mask = self._read_scene_cached(sample.scene_mask_path, cv2.IMREAD_GRAYSCALE, self._scene_mask_cache)
+        image_crop = crop_with_margin(image_bgr, sample.bbox, self.bbox_margin)
+        mask_crop = np.where(crop_with_margin(scene_mask, sample.bbox, self.bbox_margin) > 127, 255, 0).astype(np.uint8)
+        if mask_crop.shape[:2] != image_crop.shape[:2]:
+            mask_crop = cv2.resize(mask_crop, (image_crop.shape[1], image_crop.shape[0]), interpolation=cv2.INTER_NEAREST)
+        if int(np.count_nonzero(mask_crop)) < 20:
+            mask_crop = np.full(image_crop.shape[:2], 255, dtype=np.uint8)
+        return image_crop, mask_crop
+
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         sample = self.samples[index]
-        image_crop, mask_crop = sample_to_crop_and_mask(sample, self.bbox_margin, self.mask_threshold)
+        image_crop, mask_crop = self._sample_to_crop_and_mask(sample)
         image_lb, mask_lb = letterbox_image_and_mask(image_crop, mask_crop, self.image_size)
         if self.augment:
             image_lb, mask_lb = augment_card_image_and_mask(image_lb, mask_lb, sample.stage)
         masked_image = compose_masked_card_image(image_lb, mask_lb)
         return card_input_to_tensor(masked_image, mask_lb), torch.tensor(self.label_to_index[sample.label], dtype=torch.long)
+
+
+class RotatingCoverageSampler(Sampler[int]):
+    def __init__(self, dataset_size: int, samples_per_epoch: int, seed: int, shuffle_epoch: bool = True):
+        if dataset_size <= 0:
+            raise ValueError("dataset_size must be positive")
+        self.dataset_size = int(dataset_size)
+        self.samples_per_epoch = int(min(max(1, samples_per_epoch), dataset_size))
+        self.shuffle_epoch = bool(shuffle_epoch)
+        self._rng = random.Random(seed)
+        self._indices = list(range(self.dataset_size))
+        self._rng.shuffle(self._indices)
+        self._cursor = 0
+
+    def __iter__(self):
+        selected: list[int] = []
+        while len(selected) < self.samples_per_epoch:
+            remaining = self.dataset_size - self._cursor
+            take = min(self.samples_per_epoch - len(selected), remaining)
+            selected.extend(self._indices[self._cursor:self._cursor + take])
+            self._cursor += take
+            if self._cursor >= self.dataset_size:
+                self._rng.shuffle(self._indices)
+                self._cursor = 0
+        if self.shuffle_epoch:
+            self._rng.shuffle(selected)
+        return iter(selected)
+
+    def __len__(self) -> int:
+        return self.samples_per_epoch
+
+
+def _seed_loader_worker(worker_id: int) -> None:
+    worker_seed = torch.initial_seed() % 2**32
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+    cv2.setNumThreads(0)
 
 
 def _make_balanced_sampler(samples: list[CardSample], seed: int, samples_per_epoch: int | None) -> WeightedRandomSampler:
@@ -454,9 +530,12 @@ def make_loader(
     balanced: bool = False,
     samples_per_epoch: int | None = None,
     persistent_workers: bool = True,
+    cache_scene_assets: bool = True,
+    cache_max_scene_assets: int = 128,
 ) -> tuple[DataLoader, CardMaskedDataset]:
-    dataset = CardMaskedDataset(samples, label_to_index, image_size, bbox_margin, mask_threshold, augment)
+    dataset = CardMaskedDataset(samples, label_to_index, image_size, bbox_margin, mask_threshold, augment, cache_scene_assets, cache_max_scene_assets)
     sampler = None
+    generator = torch.Generator().manual_seed(seed)
     if samples and balanced:
         sampler = _make_balanced_sampler(samples, seed, samples_per_epoch)
     elif samples_per_epoch is not None and samples:
@@ -471,6 +550,40 @@ def make_loader(
         num_workers=num_workers,
         pin_memory=pin_memory,
         persistent_workers=bool(persistent_workers and num_workers > 0),
+        worker_init_fn=_seed_loader_worker if num_workers > 0 else None,
+        generator=generator,
+    )
+    return loader, dataset
+
+
+def make_rotating_loader(
+    samples: list[CardSample],
+    label_to_index: dict[str, int],
+    batch_size: int,
+    image_size: int,
+    bbox_margin: float,
+    mask_threshold: float,
+    augment: bool,
+    pin_memory: bool,
+    num_workers: int,
+    seed: int,
+    samples_per_epoch: int,
+    persistent_workers: bool = True,
+    cache_scene_assets: bool = True,
+    cache_max_scene_assets: int = 128,
+) -> tuple[DataLoader, CardMaskedDataset]:
+    dataset = CardMaskedDataset(samples, label_to_index, image_size, bbox_margin, mask_threshold, augment, cache_scene_assets, cache_max_scene_assets)
+    sampler = RotatingCoverageSampler(len(samples), samples_per_epoch, seed=seed, shuffle_epoch=True)
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        sampler=sampler,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=bool(persistent_workers and num_workers > 0),
+        worker_init_fn=_seed_loader_worker if num_workers > 0 else None,
+        generator=torch.Generator().manual_seed(seed),
     )
     return loader, dataset
 
@@ -547,6 +660,8 @@ def initialize_training_pipeline(
         pin_memory=pin_memory,
         num_workers=effective_workers,
         persistent_workers=cfg.persistent_workers,
+        cache_scene_assets=cfg.cache_scene_assets,
+        cache_max_scene_assets=cfg.cache_max_scene_assets,
         seed=cfg.seed,
     )
     aug_per_epoch = _stage_samples_per_epoch(len(augmented_card_samples), "augmented_card", batch_size, device, cfg)
@@ -592,6 +707,8 @@ def initialize_training_pipeline(
         "num_workers": effective_workers,
         "pin_memory": pin_memory,
         "persistent_workers": bool(cfg.persistent_workers and effective_workers > 0),
+        "cache_scene_assets": cfg.cache_scene_assets,
+        "cache_max_scene_assets": cfg.cache_max_scene_assets,
         "card_model_path": classifier_bundle_dir / "card_classifier.pth",
         "card_classes_path": classifier_bundle_dir / "classes.npy",
         "card_config_path": classifier_bundle_dir / "config.json",
@@ -748,17 +865,28 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             f"dataset_samples={len(stage_samples):,}, samples_per_epoch={samples_per_epoch:,}, "
             f"batch_size={state['batch_size']}, workers={state.get('num_workers', cfg.num_workers)}"
         )
-        coverage_indices: list[int] | None = None
-        coverage_cursor = 0
-        coverage_rng: random.Random | None = None
         if samples_per_epoch < len(stage_samples):
-            coverage_indices = list(range(len(stage_samples)))
-            coverage_rng = random.Random(cfg.seed + stage_index * 10_000)
-            coverage_rng.shuffle(coverage_indices)
-            print("  per-epoch cap active: cycling through the full stage sample pool before repeating")
+            print("  per-epoch cap active: one persistent loader cycles through the full stage sample pool")
 
         reusable_loader: DataLoader | None = None
-        if samples_per_epoch >= len(stage_samples):
+        if samples_per_epoch < len(stage_samples):
+            reusable_loader, _ = make_rotating_loader(
+                stage_samples,
+                state["label_to_index"],
+                state["batch_size"],
+                cfg.img_size,
+                cfg.bbox_margin,
+                cfg.mask_threshold,
+                augment=True,
+                pin_memory=device.type == "cuda",
+                num_workers=state.get("num_workers", cfg.num_workers),
+                seed=cfg.seed + stage_index * 10_000,
+                samples_per_epoch=samples_per_epoch,
+                persistent_workers=cfg.persistent_workers,
+                cache_scene_assets=cfg.cache_scene_assets,
+                cache_max_scene_assets=cfg.cache_max_scene_assets,
+            )
+        else:
             reusable_loader, _ = make_loader(
                 stage_samples,
                 state["label_to_index"],
@@ -774,39 +902,11 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 balanced=cfg.balanced_sampling,
                 samples_per_epoch=samples_per_epoch,
                 persistent_workers=cfg.persistent_workers,
+                cache_scene_assets=cfg.cache_scene_assets,
+                cache_max_scene_assets=cfg.cache_max_scene_assets,
             )
         for epoch in range(1, stage_epochs + 1):
-            if reusable_loader is not None:
-                loader = reusable_loader
-            else:
-                if coverage_indices is None or coverage_rng is None:
-                    raise RuntimeError("Coverage sampler state was not initialized.")
-                selected_indices: list[int] = []
-                while len(selected_indices) < samples_per_epoch:
-                    remaining = len(coverage_indices) - coverage_cursor
-                    take = min(samples_per_epoch - len(selected_indices), remaining)
-                    selected_indices.extend(coverage_indices[coverage_cursor:coverage_cursor + take])
-                    coverage_cursor += take
-                    if coverage_cursor >= len(coverage_indices):
-                        coverage_rng.shuffle(coverage_indices)
-                        coverage_cursor = 0
-                epoch_samples = [stage_samples[index] for index in selected_indices]
-                loader, _ = make_loader(
-                    epoch_samples,
-                    state["label_to_index"],
-                    state["batch_size"],
-                    cfg.img_size,
-                    cfg.bbox_margin,
-                    cfg.mask_threshold,
-                    shuffle=True,
-                    augment=True,
-                    pin_memory=device.type == "cuda",
-                    num_workers=state.get("num_workers", cfg.num_workers),
-                    seed=cfg.seed + stage_index * 10_000 + epoch,
-                    balanced=cfg.balanced_sampling,
-                    samples_per_epoch=None,
-                    persistent_workers=cfg.persistent_workers,
-                )
+            loader = reusable_loader
             epoch_start = time.perf_counter()
             try:
                 train_metrics = _train_one_epoch(model, loader, optimizer, ce_loss, state["scaler"], use_amp, device, cfg)
