@@ -51,6 +51,8 @@ class CreateAugmentedDataConfig:
     aug_card_generation_workers: int = 0
     aug_card_generation_backend: str = "thread"
     aug_card_generation_chunk_size: int = 32
+    card_value_bias_values: tuple[str, ...] = ("1", "2", "3", "7")
+    card_value_bias_multiplier: float = 1.25
 
     n_scenes: int = 12288
     scene_width: int = 1280
@@ -528,8 +530,41 @@ def separated_binary_mask(instance_map: np.ndarray, gap_pixels: int, min_visible
     return binary
 
 
-def _sample_card(card_assets: list[CardAsset], rng: np.random.Generator) -> CardAsset:
-    return card_assets[int(rng.integers(0, len(card_assets)))]
+def _card_value_from_label(label: str) -> str:
+    label = str(label)
+    if label in {"wild", "draw_4"}:
+        return label
+    parts = label.split("_", 1)
+    return parts[1] if len(parts) == 2 else label
+
+
+def _card_sample_weight(label: str, cfg: CreateAugmentedDataConfig) -> float:
+    multiplier = float(cfg.card_value_bias_multiplier)
+    if multiplier <= 0:
+        raise ValueError(f"card_value_bias_multiplier must be > 0, got {cfg.card_value_bias_multiplier}")
+    bias_values = {str(value).strip() for value in cfg.card_value_bias_values if str(value).strip()}
+    if _card_value_from_label(label) in bias_values:
+        return multiplier
+    return 1.0
+
+
+def _card_sampling_probabilities(card_assets: list[CardAsset], cfg: CreateAugmentedDataConfig) -> np.ndarray | None:
+    if not cfg.card_value_bias_values or abs(float(cfg.card_value_bias_multiplier) - 1.0) < 1e-9:
+        return None
+    weights = np.array([_card_sample_weight(asset.label, cfg) for asset in card_assets], dtype=np.float64)
+    if not np.any(np.abs(weights - weights[0]) > 1e-9):
+        return None
+    return weights / float(weights.sum())
+
+
+def _sample_card(
+    card_assets: list[CardAsset],
+    rng: np.random.Generator,
+    card_probabilities: np.ndarray | None = None,
+) -> CardAsset:
+    if card_probabilities is None:
+        return card_assets[int(rng.integers(0, len(card_assets)))]
+    return card_assets[int(rng.choice(len(card_assets), p=card_probabilities))]
 
 
 def _clamped_center(center_xy: np.ndarray, scene_width: int, scene_height: int) -> tuple[float, float]:
@@ -547,6 +582,7 @@ def _player_card_placements(
     card_assets: list[CardAsset],
     cfg: CreateAugmentedDataConfig,
     rng: np.random.Generator,
+    card_probabilities: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     if card_count <= 0:
         return []
@@ -569,7 +605,7 @@ def _player_card_placements(
         inward_jitter = float(rng.normal(0, cfg.scene_height * float(rng.uniform(*cfg.player_inward_jitter_fraction_range))))
         center = base_center + axis * (float(offset) + offset_jitter) + inward * inward_jitter
         placements.append({
-            "asset": _sample_card(card_assets, rng),
+            "asset": _sample_card(card_assets, rng, card_probabilities),
             "center": _clamped_center(center, cfg.scene_width, cfg.scene_height),
             "angle": float(layout["angle"] + rng.normal(0, float(rng.uniform(*cfg.player_rotation_jitter_deg_range)))),
             "target_height": target_height * float(rng.uniform(0.90, 1.10)),
@@ -578,13 +614,18 @@ def _player_card_placements(
     return placements
 
 
-def _center_card_placement(card_assets: list[CardAsset], cfg: CreateAugmentedDataConfig, rng: np.random.Generator) -> dict[str, Any]:
+def _center_card_placement(
+    card_assets: list[CardAsset],
+    cfg: CreateAugmentedDataConfig,
+    rng: np.random.Generator,
+    card_probabilities: np.ndarray | None = None,
+) -> dict[str, Any]:
     center = np.array([
         float(rng.uniform(*cfg.center_position_fraction_range_x) * cfg.scene_width),
         float(rng.uniform(*cfg.center_position_fraction_range_y) * cfg.scene_height),
     ], dtype=np.float32)
     return {
-        "asset": _sample_card(card_assets, rng),
+        "asset": _sample_card(card_assets, rng, card_probabilities),
         "center": _clamped_center(center, cfg.scene_width, cfg.scene_height),
         "angle": float(rng.uniform(*cfg.center_angle_range_deg)),
         "target_height": float(rng.uniform(*cfg.center_card_height_fraction_range) * cfg.scene_height),
@@ -695,9 +736,10 @@ def compose_augmented_scene(
         player: int(rng.integers(cfg.min_cards_per_player, cfg.max_cards_per_player + 1))
         for player in PLAYERS
     }
-    placements = [_center_card_placement(card_assets, cfg, rng)]
+    card_probabilities = _card_sampling_probabilities(card_assets, cfg)
+    placements = [_center_card_placement(card_assets, cfg, rng, card_probabilities)]
     for player in PLAYERS:
-        placements.extend(_player_card_placements(player, player_counts[player], card_assets, cfg, rng))
+        placements.extend(_player_card_placements(player, player_counts[player], card_assets, cfg, rng, card_probabilities))
     rng.shuffle(placements)
 
     card_rows: list[dict[str, Any]] = []
@@ -844,20 +886,36 @@ def _card_generation_task(task: tuple[int, int, int]) -> dict[str, str]:
     )
 
 
+def _augmented_count_for_asset(asset: CardAsset, cfg: CreateAugmentedDataConfig) -> int:
+    base_count = int(cfg.n_aug_per_reference)
+    if base_count < 0:
+        raise ValueError(f"n_aug_per_reference must be >= 0, got {cfg.n_aug_per_reference}")
+    return max(0, int(round(base_count * _card_sample_weight(asset.label, cfg))))
+
+
 def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
     """Generate every single-card crop and mask from the reference assets."""
     cfg: CreateAugmentedDataConfig = state["cfg"]
     paths: AugmentationPaths = state["paths"]
     assets: list[CardAsset] = state["card_assets"]
     card_fmt: str = state["card_fmt"]
-    tasks = [
-        (ref_idx * int(cfg.n_aug_per_reference) + aug_idx, ref_idx, aug_idx)
-        for ref_idx, asset in enumerate(assets)
-        for aug_idx in range(int(cfg.n_aug_per_reference))
-    ]
+    tasks: list[tuple[int, int, int]] = []
+    global_index = 0
+    for ref_idx, asset in enumerate(assets):
+        for aug_idx in range(_augmented_count_for_asset(asset, cfg)):
+            tasks.append((global_index, ref_idx, aug_idx))
+            global_index += 1
+    uniform_total = len(assets) * max(0, int(cfg.n_aug_per_reference))
     workers = _resolve_worker_count(int(cfg.aug_card_generation_workers), len(tasks))
     backend = _resolve_generation_backend(cfg.aug_card_generation_backend)
     print(f"Generating {len(tasks):,} augmented card crops with {workers} {backend} worker(s)...")
+    if len(tasks) != uniform_total:
+        print(
+            "Card value bias: "
+            f"values={tuple(cfg.card_value_bias_values)}, "
+            f"multiplier={float(cfg.card_value_bias_multiplier):.2f}, "
+            f"uniform_total={uniform_total:,}."
+        )
     if workers == 1:
         rows = [
             _compose_and_save_augmented_card(
