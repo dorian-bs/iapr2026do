@@ -922,36 +922,66 @@ def run_saliency_pipeline(engine, image_path):
     saliency_results = []
 
     # Compute feature importances via backpropagation gradients
-    for idx, (inp, out) in enumerate(zip(captured_inputs, captured_predictions)):
-        inp_var = inp.clone().requires_grad_(True)
+    # Look for class names inside the engine structure
+    # Usually stored in engine.class_names or engine.config / engine.classifier
+    class_names = getattr(engine, 'class_names', None)
+    if class_names is None and hasattr(engine, 'classifier'):
+        class_names = getattr(engine.classifier, 'class_names', None)
+
+    # Compute feature importances via backpropagation gradients
+    classifier_model.eval()
+    device = next(classifier_model.parameters()).device
+    saliency_results = []
+
+    class_names = getattr(engine, 'class_names', None)
+    if class_names is None and hasattr(engine, 'classifier'):
+        class_names = getattr(engine.classifier, 'class_names', None)
+
+    # 1. Loop through each captured batch pass (usually just 1 pass)
+    for batch_inp, batch_out in zip(captured_inputs, captured_predictions):
         
-        with torch.set_grad_enabled(True):
-            logits = classifier_model(inp_var.to(device))
-            pred_class = logits.argmax(dim=1).item()
-            score = logits[0, pred_class]
-            score.backward()
+        # 2. Extract how many cards are stacked inside this batch
+        num_cards_in_batch = batch_inp.shape[0]
+        
+        # 3. Process every card inside the batch individually
+        for card_idx in range(num_cards_in_batch):
+            # Isolate a single card crop tensor and keep its batch dimension shape intact: (1, 4, H, W)
+            inp_single = batch_inp[card_idx:card_idx+1].clone().requires_grad_(True)
             
-        saliency = inp_var.grad.cpu().numpy()[0]   # (4, H, W)
-        input_np = inp.numpy()[0]                  # (4, H, W)
-        
-        # Max absolute gradient across RGB, and absolute gradient for the Mask channel
-        rgb_saliency = np.max(np.abs(saliency[:3]), axis=0)
-        mask_saliency = np.abs(saliency[3])
-        
-        # Normalize input crop back to [0, 1] for visual plotting
-        rgb_img = input_np[:3].transpose(1, 2, 0)
-        rgb_img = (rgb_img - rgb_img.min()) / (rgb_img.max() - rgb_img.min() + 1e-8)
-        mask_img = input_np[3]
-        
-        saliency_results.append({
-            'card_idx': idx,
-            'pred_class': pred_class,
-            'rgb_img': rgb_img,
-            'mask_img': mask_img,
-            'rgb_saliency': rgb_saliency,
-            'mask_saliency': mask_saliency
-        })
-        
+            with torch.set_grad_enabled(True):
+                logits = classifier_model(inp_single.to(device))
+                pred_class = logits.argmax(dim=1).item()
+                score = logits[0, pred_class]
+                score.backward()
+                
+            # Unpack gradients and input arrays for this specific card index
+            saliency = inp_single.grad.cpu().numpy()[0]   # Shape: (4, H, W)
+            input_np = inp_single.detach().cpu().numpy()[0]  # Shape: (4, H, W)
+            
+            # Max absolute gradient across RGB, and absolute gradient for the Mask channel
+            rgb_saliency = np.max(np.abs(saliency[:3]), axis=0)
+            mask_saliency = np.abs(saliency[3])
+            
+            # Normalize input crop back to [0, 1] for visual plotting
+            rgb_img = input_np[:3].transpose(1, 2, 0)
+            rgb_img = (rgb_img - rgb_img.min()) / (rgb_img.max() - rgb_img.min() + 1e-8)
+            mask_img = input_np[3]
+            
+            # Determine the string name
+            if class_names is not None and pred_class < len(class_names):
+                class_label = class_names[pred_class]
+            else:
+                class_label = f"Class {pred_class}"
+            
+            saliency_results.append({
+                'card_idx': len(saliency_results), # Sequential global index
+                'pred_class': class_label,
+                'rgb_img': rgb_img,
+                'mask_img': mask_img,
+                'rgb_saliency': rgb_saliency,
+                'mask_saliency': mask_saliency
+            })
+            
     return saliency_results
 
 
