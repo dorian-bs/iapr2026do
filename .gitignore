@@ -26,3 +26,4 @@ models/
 projodo/
 *.DS_Store
 .old/
+project/

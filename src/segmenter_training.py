@@ -46,14 +46,14 @@ class SegmenterPipelineConfig:
     num_workers: int = 4
     persistent_workers: bool = True
 
-    epochs: int = 40
+    epochs: int = 25
     batch_size: int = 4
-    learning_rate: float = 2e-4
+    learning_rate: float = 5e-4
     weight_decay: float = 1e-4
     train_loss_bce_weight: float = 0.5
     train_loss_dice_weight: float = 0.5
     scheduler_factor: float = 0.5
-    scheduler_patience: int = 2
+    scheduler_patience: int = 1
 
     use_amp: bool = True
     use_torch_compile: bool = False

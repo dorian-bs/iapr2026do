@@ -731,6 +731,14 @@ def compose_augmented_scene(
     token_mask = cv2.resize(token.mask, (token_w, token_h), interpolation=cv2.INTER_NEAREST)
     token_bbox = paste_patch(scene, instance_map, token_img, token_mask, _token_center(active_player, cfg, rng), instance_id=None)
 
+    # Keep segmentation targets consistent with visible cards by removing card pixels
+    # hidden behind the active-player token rectangle.
+    if token_bbox is not None:
+        x0, y0, x1, y1 = map(int, token_bbox)
+        token_roi = instance_map[y0:y1, x0:x1]
+        if np.any(token_roi > 0):
+            token_roi[:] = 0
+
     scene_mask = separated_binary_mask(instance_map, cfg.mask_gap_pixels, cfg.min_visible_card_area)
     metadata = {
         "active_player": active_player,

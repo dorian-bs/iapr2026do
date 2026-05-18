@@ -680,6 +680,7 @@ def run_labeled_benchmark(
     top_results = sorted(results, key=lambda result: result["image_score"], reverse=True)[: min(config.top_k, len(results))]
     if config.verbose:
         weakest = ", ".join(f"{item['image_id']}={item['image_score']:.2f}" for item in worst_results) or "none"
+        strongest = ", ".join(f"{item['image_id']}={item['image_score']:.2f}" for item in top_results) or "none"
         print(
             "Benchmark summary: "
             f"center={center_acc:.3f}, active={active_acc:.3f}, player_macro={macro_f1:.3f}, "
@@ -688,6 +689,7 @@ def run_labeled_benchmark(
             f"cards pred/true={sum(result['pred_card_count'] for result in results)}/{sum(result['true_card_count'] for result in results)}."
         )
         print(f"Weakest labelled images: {weakest}.")
+        print(f"Top labelled images: {strongest}.")
 
     benchmark = {
         "results": results,
@@ -714,6 +716,7 @@ def run_labeled_benchmark(
     if config.show_plots:
         plot_benchmark_summary(benchmark)
         plot_benchmark_examples(worst_results, "Lowest-scoring labelled examples", eval_engine)
+        plot_benchmark_examples(top_results, "Top-scoring labelled examples", eval_engine)
     return benchmark
 
 
@@ -778,36 +781,39 @@ def plot_benchmark_examples(
     examples: list[dict[str, object]],
     title: str,
     engine: InferenceEngine | None = None,
-    cols: int = 2,
+    cols: int | None = None,
 ) -> None:
-    """Compact qualitative overlays for the lowest-scoring labelled examples."""
+    """Qualitative benchmark rows: annotated prediction beside predicted mask.
+
+    `cols` is kept for older notebook calls; the report layout is fixed at two columns.
+    """
     if not examples:
         print(f"No examples to plot for: {title}")
         return
 
-    _ = engine
-    rows = (len(examples) + cols - 1) // cols
-    fig, axes = plt.subplots(rows, cols, figsize=(7.2 * cols, 5.2 * rows), squeeze=False)
+    rows = len(examples)
+    fig, axes = plt.subplots(rows, 2, figsize=(14.5, 5.0 * rows), squeeze=False)
 
     for index, item in enumerate(examples):
-        row_index, col_index = divmod(index, cols)
-        axis = axes[row_index, col_index]
+        image_axis = axes[index, 0]
+        mask_axis = axes[index, 1]
         image_path = Path(item["image_path"])
         image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
         if image_bgr is None:
-            axis.axis("off")
+            image_axis.axis("off")
+            mask_axis.axis("off")
             continue
 
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
         pred_state = item["pred_state"]
         predictions = pred_state.cards if isinstance(pred_state, GameState) else []
 
-        axis.imshow(image_rgb)
+        image_axis.imshow(image_rgb)
         for pred in predictions:
             color = REGION_COLORS.get(pred.region, "white")
             x0, y0, x1, y1 = pred.box
-            axis.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=color, linewidth=2.2))
-            axis.text(
+            image_axis.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=color, linewidth=2.2))
+            image_axis.text(
                 x0,
                 max(0, y0 - 8),
                 f"{pred.region}: {pred.label} ({pred.confidence:.2f})",
@@ -818,16 +824,38 @@ def plot_benchmark_examples(
 
         pred_summary = item["pred_summary"]
         true_summary = item["true_summary"]
-        axis.set_title(
+        image_axis.set_title(
             f"{item['image_id']} score={float(item['image_score']):.3f}\n"
             f"center {pred_summary['center_card']} -> {true_summary['center_card']} | "
+            f"active {pred_summary['active_player']} -> {true_summary['active_player']} | "
             f"cards {item['pred_card_count']} -> {item['true_card_count']}",
             fontsize=9,
         )
-        axis.axis("off")
+        image_axis.axis("off")
 
-    for index in range(len(examples), rows * cols):
-        axes[index // cols, index % cols].axis("off")
+        mask_title = "Predicted mask"
+        if engine is not None:
+            probability = segment_scene_probability(
+                image_bgr,
+                engine.segmenter,
+                engine.device,
+                target_size=engine.config.segmenter_img_size,
+            )
+            _, predicted_mask = boxes_from_probability(
+                probability,
+                threshold=engine.config.segmenter_threshold,
+                min_component_area=engine.config.segmenter_min_component_area,
+                instance_mask_growth_px=engine.config.instance_mask_growth_px,
+            )
+            mask_title = f"Predicted mask (threshold={engine.config.segmenter_threshold:.2f})"
+        else:
+            predicted_mask = np.zeros(image_bgr.shape[:2], dtype=np.uint8)
+            for pred in predictions:
+                predicted_mask[pred.instance_mask > 0] = 1
+
+        mask_axis.imshow(predicted_mask, cmap="gray", vmin=0, vmax=1)
+        mask_axis.set_title(mask_title, fontsize=9)
+        mask_axis.axis("off")
 
     fig.suptitle(title, fontsize=12)
     plt.tight_layout()
