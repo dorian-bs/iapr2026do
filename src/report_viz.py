@@ -22,7 +22,7 @@ from matplotlib.patches import Patch, Polygon, Rectangle
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from src.inference import predict_from_path
+from sklearn.manifold import TSNE
 
 from src.inference import (
     assign_region,
@@ -36,6 +36,7 @@ from src.inference import (
     find_yellow_token,
     is_background_noisy,
     predict_cards,
+    predict_from_path,
     predict_game_state,
     segment_scene_probability,
 )
@@ -1005,3 +1006,297 @@ def plot_saliency_dashboard(saliency_results):
         
         plt.tight_layout()
         plt.show()
+        
+## Finer-grained analysis 
+
+import torch
+import numpy as np
+from sklearn.manifold import TSNE
+from src.inference import predict_from_path
+
+def get_classifier_model(engine):
+    """Safely extracts the classifier submodule from the engine framework."""
+    for attr_name in dir(engine):
+        attr = getattr(engine, attr_name, None)
+        if isinstance(attr, torch.nn.Module) and "classifier" in attr_name.lower():
+            return attr
+    for attr_name in dir(engine):
+        attr = getattr(engine, attr_name, None)
+        if isinstance(attr, torch.nn.Module) and "segment" not in attr_name.lower():
+            return attr
+    raise ValueError("Could not find the classifier network within the 'engine' object.")
+
+# -------------------------------------------------------------------------
+# Embeddings for Latent Space (t-SNE) & Confidence vs Mask Area
+# -------------------------------------------------------------------------
+def profile_latent_and_confidence(engine, image_paths):
+    """
+    Processes a collection of image paths to harvest feature embeddings, 
+    predictions, confidence scores, and card sizes for advanced pipeline analysis.
+    """
+    model = get_classifier_model(engine).eval()
+    device = next(model.parameters()).device
+    
+    # 1. Dynamically locate the pooling layer (where 512-D features are formed)
+    pooling_layer = None
+    if hasattr(model, 'avgpool'):
+        pooling_layer = model.avgpool
+    else:
+        # Fallback scan: look for AdaptiveAvgPool2d or AvgPool2d submodules
+        for module in model.modules():
+            if isinstance(module, (torch.nn.AdaptiveAvgPool2d, torch.nn.AvgPool2d)):
+                pooling_layer = module
+                break
+                
+    if pooling_layer is None:
+        raise AttributeError("Could not automatically locate the global pooling layer in your classifier network.")
+        
+    embeddings = []
+    predictions = []
+    confidences = []
+    mask_areas = []
+    
+    # 2. Setup the forward hook to capture the latent pooling tensors
+    captured_pool = []
+    hook = pooling_layer.register_forward_hook(lambda m, i, o: captured_pool.append(o.detach().cpu()))
+    
+    try:
+        for path in image_paths:
+            current_start_idx = len(captured_pool)
+            
+            # Run complete inference pipeline stage
+            state = predict_from_path(engine, path)
+            
+            # Compute how many card crops were sent to the classifier in this image pass
+            new_crops_num = len(captured_pool) - current_start_idx
+            if new_crops_num == 0: 
+                continue
+            
+            # 3. Process every individual card detected in the image scene
+            for idx in range(new_crops_num):
+                pool_out = captured_pool[current_start_idx + idx]
+                
+                # Flatten the pooling output to isolate the raw feature embedding vector
+                feat_vec = torch.flatten(pool_out, 1).numpy()[0]
+                embeddings.append(feat_vec)
+                
+                # Extract state prediction parameters safely
+                with torch.no_grad():
+                    card_obj = state.cards[idx]
+                    
+                    # --- Robust Card Size / Mask Area Fallback Logic ---
+                    if hasattr(card_obj, 'mask') and card_obj.mask is not None:
+                        area = np.sum(card_obj.mask > 0)
+                    elif hasattr(card_obj, 'binary_mask') and card_obj.binary_mask is not None:
+                        area = np.sum(card_obj.binary_mask > 0)
+                    elif hasattr(card_obj, 'box') and card_obj.box is not None:
+                        box = card_obj.box
+                        # Handle common bounding box shapes: [x, y, w, h] or [ymin, xmin, ymax, xmax]
+                        if len(box) >= 4:
+                            area = float(box[2]) * float(box[3])
+                        else:
+                            area = 1.0
+                    else:
+                        area = 1.0
+                        
+                    mask_areas.append(area)
+                    
+                    # Extract class assignments and softmax confidences
+                    pred_idx = getattr(card_obj, 'pred_class_idx', None)
+                    if pred_idx is None:
+                        pred_idx = getattr(card_obj, 'class_idx', 0)
+                        
+                    predictions.append(pred_idx)
+                    confidences.append(getattr(card_obj, 'confidence', 1.0))
+                    
+    finally:
+        # Guarantee hook removal to prevent lingering memory consumption
+        hook.remove()
+        
+    embeddings = np.array(embeddings)
+    
+    embeddings = np.array(embeddings)
+    
+    # --- FIXED ROBUST T-SNE MATH ---
+    if len(embeddings) > 1:
+        # Force a tiny perplexity value if data is sparse, and lower iterations to converge fast
+        calculated_perplexity = min(30, max(2, len(embeddings) // 2))
+        
+        tsne = TSNE(
+            n_components=2, 
+            perplexity=calculated_perplexity, 
+            init='random',       # Keeps initialization simple for low samples
+            learning_rate='auto', # Automatically scales stepping distance
+            n_iter=1000,          # Gives the math enough time to push points apart
+            random_state=42
+        )
+        tsne_proj = tsne.fit_transform(embeddings)
+    else:
+        tsne_proj = np.zeros((len(embeddings), 2))
+    # -------------------------------
+        
+    return {
+        'tsne_coords': tsne_proj,
+        'classes': np.array(predictions),
+        'confidences': np.array(confidences),
+        'mask_areas': np.array(mask_areas)
+    }
+
+# -------------------------------------------------------------------------
+# Channel Attribution (Integrated Gradients Approximation)
+# -------------------------------------------------------------------------
+def compute_channel_attribution(engine, image_path, steps=20):
+    """Calculates relative importance between RGB vs Mask channels using path integrals."""
+    model = get_classifier_model(engine).eval()
+    device = next(model.parameters()).device
+    
+    captured_inputs = []
+    hook = model.register_forward_hook(lambda m, i, o: captured_inputs.append(i[0].detach().cpu()))
+    try:
+        _ = predict_from_path(engine, image_path)
+    finally:
+        hook.remove()
+        
+    if not captured_inputs: return []
+    
+    batch_inp = captured_inputs[0]
+    attributions = []
+    
+    for card_idx in range(batch_inp.shape[0]):
+        inp_single = batch_inp[card_idx:card_idx+1].to(device)
+        baseline = torch.zeros_like(inp_single)
+        scaled_inputs = [baseline + (float(i) / steps) * (inp_single - baseline) for i in range(steps + 1)]
+        
+        grads = []
+        for scaled_inp in scaled_inputs:
+            scaled_inp_var = scaled_inp.clone().requires_grad_(True)
+            logits = model(scaled_inp_var)
+            pred_class = logits.argmax(dim=1).item()
+            score = logits[0, pred_class]
+            score.backward()
+            grads.append(scaled_inp_var.grad.cpu().numpy()[0])
+            
+        avg_grads = np.mean(grads, axis=0)
+        delta = (inp_single - baseline).cpu().numpy()[0]
+        integrated_grad = avg_grads * delta
+        
+        # Aggregate feature magnitude along specific structural layers
+        rgb_attr = np.sum(np.abs(integrated_grad[:3]))
+        mask_attr = np.sum(np.abs(integrated_grad[3]))
+        total = rgb_attr + mask_attr + 1e-8
+        
+        attributions.append({
+            'card_idx': card_idx,
+            'pred_class': pred_class,
+            'rgb_percent': (rgb_attr / total) * 100,
+            'mask_percent': (mask_attr / total) * 100
+        })
+    return attributions
+
+# -------------------------------------------------------------------------
+# Intermediate Layer Activation Map Extraction
+# -------------------------------------------------------------------------
+def extract_layer_activations(engine, image_path):
+    """Intercepts and maps feature maps generated by the initial Conv layer block."""
+    model = get_classifier_model(engine).eval()
+    
+    # --- NEW ACCESSIBILITY LOGIC ---
+    # Dynamically find the first Conv2d layer inside your custom model class structure
+    target_layer = None
+    if hasattr(model, 'conv1'):
+        target_layer = model.conv1
+    else:
+        # Loop through submodules to locate the true underlying first convolutional block
+        for module in model.modules():
+            if isinstance(module, torch.nn.Conv2d):
+                target_layer = module
+                break
+                
+    if target_layer is None:
+        raise AttributeError("Could not find any Conv2d layer inside your classifier class.")
+    # --------------------------------
+    
+    activations = []
+    # Register the hook on the dynamically located layer
+    hook = target_layer.register_forward_hook(lambda m, i, o: activations.append(o.detach().cpu()))
+    try:
+        _ = predict_from_path(engine, image_path)
+    finally:
+        hook.remove()
+        
+    return activations[0] if activations else None
+
+
+def compute_channel_attribution(engine, image_path, steps=20):
+    """Calculates relative importance between Color, Texture, and U-Net Shape Mask."""
+    model = get_classifier_model(engine).eval()
+    device = next(model.parameters()).device
+    
+    captured_inputs = []
+    hook = model.register_forward_hook(lambda m, i, o: captured_inputs.append(i[0].detach().cpu()))
+    try:
+        _ = predict_from_path(engine, image_path)
+    finally:
+        hook.remove()
+        
+    if not captured_inputs: 
+        return []
+    
+    batch_inp = captured_inputs[0]
+    attributions = []
+    
+    class_names = getattr(engine, 'class_names', None)
+    if class_names is None and hasattr(engine, 'classifier'):
+        class_names = getattr(engine.classifier, 'class_names', None)
+    
+    for card_idx in range(batch_inp.shape[0]):
+        inp_single = batch_inp[card_idx:card_idx+1].to(device)
+        baseline = torch.zeros_like(inp_single)
+        scaled_inputs = [baseline + (float(i) / steps) * (inp_single - baseline) for i in range(steps + 1)]
+        
+        grads = []
+        for scaled_inp in scaled_inputs:
+            scaled_inp_var = scaled_inp.clone().requires_grad_(True)
+            logits = model(scaled_inp_var)
+            pred_class = logits.argmax(dim=1).item()
+            score = logits[0, pred_class]
+            score.backward()
+            grads.append(scaled_inp_var.grad.cpu().numpy()[0])
+            
+        avg_grads = np.mean(grads, axis=0)
+        delta = (inp_single - baseline).cpu().numpy()[0]
+        integrated_grad = avg_grads * delta
+        
+        # --- SEPARATING COLOR VS TEXTURE VS SHAPE ---
+        # 1. Shape Attribution (from the 4th Mask channel)
+        shape_attr = np.sum(np.abs(integrated_grad[3]))
+        
+        # 2. Separate RGB into Color vs Texture using a spatial high-pass operation
+        # Extract the absolute RGB integrated gradient profile
+        rgb_grad_magnitude = np.sum(np.abs(integrated_grad[:3]), axis=0) # (H, W)
+        
+        # Use a Gaussian blur proxy to separate low-frequency (Color) from high-frequency (Texture/Details)
+        low_freq_color_grad = cv2.GaussianBlur(rgb_grad_magnitude, (5, 5), 0)
+        high_freq_texture_grad = np.clip(rgb_grad_magnitude - low_freq_color_grad, 0, None)
+        
+        color_attr = np.sum(low_freq_color_grad)
+        texture_attr = np.sum(high_freq_texture_grad)
+        
+        # Normalize contributions to percentages
+        total = color_attr + texture_attr + shape_attr + 1e-8
+        
+        if class_names is not None and pred_class < len(class_names):
+            class_label = class_names[pred_class]
+        else:
+            class_label = f"Class {pred_class}"
+            
+        attributions.append({
+            'card_idx': card_idx,
+            'pred_class': class_label,
+            'color_percent': (color_attr / total) * 100,
+            'texture_percent': (texture_attr / total) * 100,
+            'shape_percent': (shape_attr / total) * 100
+        })
+    return attributions
+
+
