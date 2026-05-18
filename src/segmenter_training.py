@@ -53,7 +53,7 @@ class SegmenterPipelineConfig:
     train_loss_bce_weight: float = 0.5
     train_loss_dice_weight: float = 0.5
     scheduler_factor: float = 0.5
-    scheduler_patience: int = 1
+    scheduler_patience: int = 2
 
     use_amp: bool = True
     use_torch_compile: bool = False

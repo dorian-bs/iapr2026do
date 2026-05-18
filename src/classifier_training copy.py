@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import balanced_accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader, Dataset, RandomSampler, WeightedRandomSampler
+from torch.utils.data import DataLoader, Dataset, Sampler, WeightedRandomSampler
 
 from src.inference import (
     IMAGENET_MEAN,
@@ -39,10 +39,10 @@ class ClassifierPipelineConfig:
     val_split: float = 0.20
 
     stage_1_epochs: int = 2
-    stage_2_epochs: int = 90
+    stage_2_epochs: int = 120
 
     stage_1_lr: float = 1e-3
-    stage_2_lr: float = 4e-4
+    stage_2_lr: float = 3e-4
 
     weight_decay: float = 1e-4
     label_smoothing: float = 0.05
@@ -62,6 +62,7 @@ class ClassifierPipelineConfig:
     scene_target_gpu_mps: int = 4096
     scene_target_cpu: int = 1536
 
+    scene_finetune_freeze_bn_stats: bool = True
     grad_clip_norm: float = 1.0
     max_loaded_scene_images: int | None = None
     preview_per_stage: int = 3
@@ -366,6 +367,17 @@ def _warp_affine_pair(image_bgr: np.ndarray, mask_u8: np.ndarray, angle: float, 
     return image_out, mask_out
 
 
+def _warp_perspective_pair(image_bgr: np.ndarray, mask_u8: np.ndarray, max_jitter_fraction: float = 0.045) -> tuple[np.ndarray, np.ndarray]:
+    height, width = image_bgr.shape[:2]
+    jitter = max_jitter_fraction * min(height, width)
+    src = np.float32([[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]])
+    dst = src + np.random.uniform(-jitter, jitter, size=(4, 2)).astype(np.float32)
+    matrix = cv2.getPerspectiveTransform(src, dst)
+    image_out = cv2.warpPerspective(image_bgr, matrix, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(128, 128, 128))
+    mask_out = cv2.warpPerspective(mask_u8, matrix, (width, height), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    return image_out, mask_out
+
+
 def augment_card_image_and_mask(image_bgr: np.ndarray, mask_u8: np.ndarray, stage: str) -> tuple[np.ndarray, np.ndarray]:
     original_image = image_bgr.copy()
     original_mask = mask_u8.copy()
@@ -382,6 +394,8 @@ def augment_card_image_and_mask(image_bgr: np.ndarray, mask_u8: np.ndarray, stag
             random.uniform(-0.05, 0.05) * width,
             random.uniform(-0.05, 0.05) * height,
         )
+    if stage in SCENE_STAGES and random.random() < 0.25:
+        image_bgr, mask_u8 = _warp_perspective_pair(image_bgr, mask_u8)
     if random.random() < 0.65:
         image_bgr = cv2.convertScaleAbs(image_bgr, alpha=random.uniform(0.82, 1.18), beta=random.uniform(-18.0, 18.0))
     if random.random() < 0.35:
@@ -423,12 +437,42 @@ class CardMaskedDataset(Dataset):
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         sample = self.samples[index]
-        image_crop, mask_crop = sample_to_crop_and_mask(sample, self.bbox_margin, self.mask_threshold)
+        image_crop, mask_crop = sample_to_crop_and_mask(
+            sample,
+            self.bbox_margin,
+            self.mask_threshold,
+        )
         image_lb, mask_lb = letterbox_image_and_mask(image_crop, mask_crop, self.image_size)
         if self.augment:
             image_lb, mask_lb = augment_card_image_and_mask(image_lb, mask_lb, sample.stage)
         masked_image = compose_masked_card_image(image_lb, mask_lb)
         return card_input_to_tensor(masked_image, mask_lb), torch.tensor(self.label_to_index[sample.label], dtype=torch.long)
+
+
+class CyclingSubsetSampler(Sampler[int]):
+    def __init__(self, n_items: int, samples_per_epoch: int, seed: int):
+        if n_items <= 0:
+            raise ValueError("n_items must be positive")
+        self.n_items = int(n_items)
+        self.samples_per_epoch = int(min(max(1, samples_per_epoch), n_items))
+        self.rng = random.Random(seed)
+        self.order = list(range(self.n_items))
+        self.rng.shuffle(self.order)
+        self.cursor = 0
+
+    def __iter__(self):
+        selected: list[int] = []
+        while len(selected) < self.samples_per_epoch:
+            if self.cursor >= self.n_items:
+                self.rng.shuffle(self.order)
+                self.cursor = 0
+            take = min(self.samples_per_epoch - len(selected), self.n_items - self.cursor)
+            selected.extend(self.order[self.cursor:self.cursor + take])
+            self.cursor += take
+        return iter(selected)
+
+    def __len__(self) -> int:
+        return self.samples_per_epoch
 
 
 def _make_balanced_sampler(samples: list[CardSample], seed: int, samples_per_epoch: int | None) -> WeightedRandomSampler:
@@ -453,16 +497,18 @@ def make_loader(
     seed: int,
     balanced: bool = False,
     samples_per_epoch: int | None = None,
+    sampler_seed: int | None = None,
     persistent_workers: bool = True,
 ) -> tuple[DataLoader, CardMaskedDataset]:
     dataset = CardMaskedDataset(samples, label_to_index, image_size, bbox_margin, mask_threshold, augment)
     sampler = None
-    if samples and balanced:
-        sampler = _make_balanced_sampler(samples, seed, samples_per_epoch)
-    elif samples_per_epoch is not None and samples:
+    effective_seed = seed if sampler_seed is None else int(sampler_seed)
+    if samples_per_epoch is not None and samples:
         n_samples = int(min(max(1, samples_per_epoch), len(samples)))
         if n_samples < len(samples):
-            sampler = RandomSampler(dataset, replacement=False, num_samples=n_samples, generator=torch.Generator().manual_seed(seed))
+            sampler = CyclingSubsetSampler(len(samples), n_samples, effective_seed)
+    if sampler is None and samples and balanced:
+        sampler = _make_balanced_sampler(samples, effective_seed, samples_per_epoch)
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -566,7 +612,8 @@ def initialize_training_pipeline(
         "Classifier data: "
         f"augmented={len(augmented_card_samples):,} (per_epoch={aug_per_epoch:,}), "
         f"scene_train={len(scene_train_samples):,} (per_epoch={scene_manual_per_epoch:,}), "
-        f"scene_val={len(scene_val_samples):,}, classes={len(all_labels):,}."
+        f"scene_val={len(scene_val_samples):,}, "
+        f"classes={len(all_labels):,}."
     )
     print(
         "Classifier loader: "
@@ -612,36 +659,81 @@ def initialize_training_pipeline(
     }
 
 
+def _inverse_error_score(value: float) -> float:
+    return 1.0 / (1.0 + max(0.0, float(value)))
+
+
 def _selection_score_from_metrics(metrics: dict[str, float], cfg: ClassifierPipelineConfig) -> float:
-    metric = cfg.best_epoch_selection_metric.strip().lower()
-    if metric in {"val_acc", "acc", "accuracy"}:
-        return float(metrics["cls_acc"])
-    if metric in {"macro_f1", "f1"}:
-        return float(metrics["macro_f1"])
-    if metric in {"balanced_acc", "balanced_accuracy"}:
-        return float(metrics["balanced_acc"])
-    if metric in {"top3", "top3_acc"}:
-        return float(metrics["top3_acc"])
-    loss_score = 1.0 / (1.0 + max(0.0, float(metrics["loss"])))
-    return (
-        cfg.selection_weight_val_acc * float(metrics["cls_acc"])
-        + cfg.selection_weight_macro_f1 * float(metrics["macro_f1"])
-        + cfg.selection_weight_balanced_acc * float(metrics["balanced_acc"])
-        + cfg.selection_weight_top3_acc * float(metrics["top3_acc"])
-        + cfg.selection_weight_val_loss * loss_score
-    )
+    metric = str(cfg.best_epoch_selection_metric).strip().lower()
+    direct_metrics = {
+        "val_acc": "cls_acc",
+        "acc": "cls_acc",
+        "accuracy": "cls_acc",
+        "val_cls_acc": "cls_acc",
+        "cls_acc": "cls_acc",
+        "macro_f1": "macro_f1",
+        "f1": "macro_f1",
+        "val_macro_f1": "macro_f1",
+        "balanced_acc": "balanced_acc",
+        "balanced_accuracy": "balanced_acc",
+        "val_balanced_acc": "balanced_acc",
+        "top3": "top3_acc",
+        "top3_acc": "top3_acc",
+        "val_top3_acc": "top3_acc",
+        "weighted_f1": "weighted_f1",
+        "val_weighted_f1": "weighted_f1",
+    }
+    if metric in direct_metrics:
+        return float(metrics[direct_metrics[metric]])
+    if metric in {"neg_val_loss", "inv_val_loss", "loss_inverse"}:
+        return _inverse_error_score(float(metrics["loss"]))
+    if metric != "composite":
+        raise ValueError(
+            "Unsupported best_epoch_selection_metric. Use one of: "
+            "composite, val_cls_acc, val_macro_f1, val_balanced_acc, "
+            "val_top3_acc, val_weighted_f1, neg_val_loss."
+        )
+    weighted_terms = [
+        (float(cfg.selection_weight_val_acc), float(metrics["cls_acc"])),
+        (float(cfg.selection_weight_macro_f1), float(metrics["macro_f1"])),
+        (float(cfg.selection_weight_balanced_acc), float(metrics["balanced_acc"])),
+        (float(cfg.selection_weight_top3_acc), float(metrics["top3_acc"])),
+        (float(cfg.selection_weight_val_loss), _inverse_error_score(float(metrics["loss"]))),
+    ]
+    total_weight = sum(max(0.0, weight) for weight, _ in weighted_terms)
+    if total_weight <= 0:
+        raise ValueError("Composite selection weights must contain at least one positive value.")
+    weighted_sum = sum(max(0.0, weight) * value for weight, value in weighted_terms)
+    return float(weighted_sum / total_weight)
 
 
-def _classification_metrics(loss_sum: float, n_samples: int, true_labels: list[int], pred_labels: list[int], top3_hits: int, confidences: list[float]) -> dict[str, float]:
+def _autocast_device_type(device: torch.device) -> str:
+    return "cuda" if device.type == "cuda" else "cpu"
+
+
+def _freeze_batchnorm_running_stats(module: nn.Module) -> None:
+    if isinstance(module, nn.modules.batchnorm._BatchNorm):
+        module.eval()
+
+
+def _safe_logits(logits: torch.Tensor) -> torch.Tensor:
+    if not torch.isfinite(logits).all():
+        return torch.nan_to_num(logits, nan=0.0, posinf=0.0, neginf=0.0)
+    return logits
+
+
+def _classification_metrics(loss_sum: float, n_samples: int, true_labels: list[int], pred_labels: list[int], top3_hits: int, confidence_sum: float, skipped_batches: int = 0) -> dict[str, float]:
     if n_samples == 0:
-        return {key: 0.0 for key in ("loss", "cls_acc", "top3_acc", "mean_confidence", "macro_precision", "macro_recall", "macro_f1", "weighted_precision", "weighted_recall", "weighted_f1", "balanced_acc")}
+        out = {key: 0.0 for key in ("loss", "cls_acc", "top3_acc", "mean_confidence", "macro_precision", "macro_recall", "macro_f1", "weighted_precision", "weighted_recall", "weighted_f1", "balanced_acc")}
+        out["skipped_non_finite_batches"] = float(skipped_batches)
+        return out
     precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(true_labels, pred_labels, average="macro", zero_division=0)
     precision_weighted, recall_weighted, f1_weighted, _ = precision_recall_fscore_support(true_labels, pred_labels, average="weighted", zero_division=0)
     return {
         "loss": loss_sum / n_samples,
         "cls_acc": float(np.mean(np.array(true_labels) == np.array(pred_labels))),
         "top3_acc": top3_hits / n_samples,
-        "mean_confidence": float(np.mean(confidences)) if confidences else 0.0,
+        "mean_confidence": confidence_sum / n_samples,
         "macro_precision": float(precision_macro),
         "macro_recall": float(recall_macro),
         "macro_f1": float(f1_macro),
@@ -649,23 +741,29 @@ def _classification_metrics(loss_sum: float, n_samples: int, true_labels: list[i
         "weighted_recall": float(recall_weighted),
         "weighted_f1": float(f1_weighted),
         "balanced_acc": float(balanced_accuracy_score(true_labels, pred_labels)) if len(set(true_labels)) > 1 else 0.0,
+        "skipped_non_finite_batches": float(skipped_batches),
     }
 
 
-def _train_one_epoch(model: nn.Module, loader: DataLoader, optimizer: torch.optim.Optimizer, ce_loss: nn.Module, scaler: torch.amp.GradScaler | None, use_amp: bool, device: torch.device, cfg: ClassifierPipelineConfig) -> dict[str, float]:
+def _train_one_epoch(model: nn.Module, loader: DataLoader, optimizer: torch.optim.Optimizer, ce_loss: nn.Module, scaler: torch.amp.GradScaler | None, use_amp: bool, device: torch.device, cfg: ClassifierPipelineConfig, stage_kind: str) -> dict[str, float]:
     model.train()
+    if cfg.scene_finetune_freeze_bn_stats and stage_kind in SCENE_STAGES:
+        model.apply(_freeze_batchnorm_running_stats)
     loss_sum = 0.0
-    true_labels: list[int] = []
-    pred_labels: list[int] = []
-    top3_hits = 0
-    confidences: list[float] = []
+    acc_sum = 0.0
+    n_samples = 0
+    skipped_batches = 0
     for images, targets in loader:
         images = images.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
         optimizer.zero_grad(set_to_none=True)
-        with torch.amp.autocast(device_type="cuda", enabled=use_amp):
+        with torch.autocast(device_type=_autocast_device_type(device), dtype=torch.float16, enabled=use_amp):
             logits = model(images)
-            loss = ce_loss(logits, targets)
+            logits = _safe_logits(logits)
+            loss = ce_loss(logits.float(), targets)
+        if not torch.isfinite(loss):
+            skipped_batches += 1
+            continue
         if scaler is not None and use_amp:
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -678,16 +776,16 @@ def _train_one_epoch(model: nn.Module, loader: DataLoader, optimizer: torch.opti
             if cfg.grad_clip_norm > 0:
                 nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip_norm)
             optimizer.step()
-        probs = torch.softmax(logits.detach(), dim=1)
-        pred = probs.argmax(dim=1)
-        topk = torch.topk(probs, k=min(3, probs.shape[1]), dim=1).indices
         batch_size = int(targets.shape[0])
+        pred = logits.detach().argmax(dim=1)
         loss_sum += float(loss.item()) * batch_size
-        true_labels.extend(targets.cpu().tolist())
-        pred_labels.extend(pred.cpu().tolist())
-        top3_hits += int((topk == targets[:, None]).any(dim=1).sum().item())
-        confidences.extend(probs.max(dim=1).values.cpu().tolist())
-    return _classification_metrics(loss_sum, len(true_labels), true_labels, pred_labels, top3_hits, confidences)
+        acc_sum += float((pred == targets).float().mean().item()) * batch_size
+        n_samples += batch_size
+    return {
+        "loss": loss_sum / max(n_samples, 1),
+        "cls_acc": acc_sum / max(n_samples, 1),
+        "skipped_non_finite_batches": float(skipped_batches),
+    }
 
 
 @torch.no_grad()
@@ -697,14 +795,19 @@ def _evaluate_one_epoch(model: nn.Module, loader: DataLoader, ce_loss: nn.Module
     true_labels: list[int] = []
     pred_labels: list[int] = []
     top3_hits = 0
-    confidences: list[float] = []
+    confidence_sum = 0.0
+    skipped_batches = 0
     for images, targets in loader:
         images = images.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
-        with torch.amp.autocast(device_type="cuda", enabled=use_amp):
+        with torch.autocast(device_type=_autocast_device_type(device), dtype=torch.float16, enabled=use_amp):
             logits = model(images)
-            loss = ce_loss(logits, targets)
-        probs = torch.softmax(logits, dim=1)
+        logits = _safe_logits(logits)
+        loss = ce_loss(logits.float(), targets)
+        if not torch.isfinite(loss):
+            skipped_batches += 1
+            continue
+        probs = torch.softmax(logits.float(), dim=1)
         pred = probs.argmax(dim=1)
         topk = torch.topk(probs, k=min(3, probs.shape[1]), dim=1).indices
         batch_size = int(targets.shape[0])
@@ -712,8 +815,8 @@ def _evaluate_one_epoch(model: nn.Module, loader: DataLoader, ce_loss: nn.Module
         true_labels.extend(targets.cpu().tolist())
         pred_labels.extend(pred.cpu().tolist())
         top3_hits += int((topk == targets[:, None]).any(dim=1).sum().item())
-        confidences.extend(probs.max(dim=1).values.cpu().tolist())
-    return _classification_metrics(loss_sum, len(true_labels), true_labels, pred_labels, top3_hits, confidences)
+        confidence_sum += float(probs.max(dim=1).values.sum().item())
+    return _classification_metrics(loss_sum, len(true_labels), true_labels, pred_labels, top3_hits, confidence_sum, skipped_batches)
 
 
 def run_training(state: dict[str, Any]) -> dict[str, Any]:
@@ -724,9 +827,15 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
     device: torch.device = state["device"]
     use_amp: bool = state["use_amp"]
     stage_plan = [
-        ("stage1_augmented_cards", cfg.stage_1_epochs, state["augmented_card_samples"], state["augmented_samples_per_epoch"], cfg.stage_1_lr),
-        ("stage2_scene_manual_masks", cfg.stage_2_epochs, state["scene_train_samples"], state["scene_manual_samples_per_epoch"], cfg.stage_2_lr),
+        ("stage1_augmented_cards", "augmented_card", cfg.stage_1_epochs, state["augmented_card_samples"], state["augmented_samples_per_epoch"], cfg.stage_1_lr),
+        ("stage2_scene_manual_masks", "scene_manual", cfg.stage_2_epochs, state["scene_train_samples"], state["scene_manual_samples_per_epoch"], cfg.stage_2_lr),
     ]
+    active_stage_indices = [
+        index
+        for index, (_, _, stage_epochs, stage_samples, _, _) in enumerate(stage_plan, start=1)
+        if stage_epochs > 0 and len(stage_samples) > 0
+    ]
+    last_active_stage_index = active_stage_indices[-1] if active_stage_indices else -1
     history: list[dict[str, float | int | str]] = []
     last_stage_best_score = -float("inf")
     last_stage_best_acc = -1.0
@@ -734,7 +843,7 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
     last_stage_name: str | None = None
     last_stage_best_epoch = -1
     global_start = time.perf_counter()
-    for stage_index, (stage_name, stage_epochs, stage_samples, stage_samples_per_epoch, stage_lr) in enumerate(stage_plan, start=1):
+    for stage_index, (stage_name, stage_kind, stage_epochs, stage_samples, stage_samples_per_epoch, stage_lr) in enumerate(stage_plan, start=1):
         if stage_epochs <= 0 or len(stage_samples) == 0:
             print(f"[skip] {stage_name}: no epochs or no samples")
             continue
@@ -755,8 +864,7 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
             coverage_indices = list(range(len(stage_samples)))
             coverage_rng = random.Random(cfg.seed + stage_index * 10_000)
             coverage_rng.shuffle(coverage_indices)
-            print("  per-epoch cap active: cycling through the full stage sample pool before repeating")
-
+            print("  per-epoch cap active: cycling through the full stage pool before repeating")
         reusable_loader: DataLoader | None = None
         if samples_per_epoch >= len(stage_samples):
             reusable_loader, _ = make_loader(
@@ -802,14 +910,15 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                     augment=True,
                     pin_memory=device.type == "cuda",
                     num_workers=state.get("num_workers", cfg.num_workers),
-                    seed=cfg.seed + stage_index * 10_000 + epoch,
+                    seed=cfg.seed,
                     balanced=cfg.balanced_sampling,
                     samples_per_epoch=None,
+                    sampler_seed=cfg.seed + stage_index * 10_000 + epoch,
                     persistent_workers=cfg.persistent_workers,
                 )
             epoch_start = time.perf_counter()
             try:
-                train_metrics = _train_one_epoch(model, loader, optimizer, ce_loss, state["scaler"], use_amp, device, cfg)
+                train_metrics = _train_one_epoch(model, loader, optimizer, ce_loss, state["scaler"], use_amp, device, cfg, stage_kind)
             finally:
                 if loader is not reusable_loader:
                     _shutdown_loader_workers(loader)
@@ -846,6 +955,8 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 "lr": float(optimizer.param_groups[0]["lr"]),
                 "seconds": float(epoch_seconds),
                 "samples_per_epoch": int(samples_per_epoch),
+                "train_skipped_non_finite_batches": int(train_metrics.get("skipped_non_finite_batches", 0)),
+                "val_skipped_non_finite_batches": int(val_metrics.get("skipped_non_finite_batches", 0)),
             }
             history.append(row)
             print(
@@ -856,7 +967,7 @@ def run_training(state: dict[str, Any]) -> dict[str, Any]:
                 f"lr={optimizer.param_groups[0]['lr']:.2e} time={_format_seconds(epoch_seconds)}"
                 + (" | stage-best" if is_best else "")
             )
-            if stage_index == len(stage_plan) and epoch >= cfg.min_epochs_per_stage and epochs_without_improvement >= cfg.early_stop_patience:
+            if stage_index == last_active_stage_index and epoch >= cfg.min_epochs_per_stage and epochs_without_improvement >= cfg.early_stop_patience:
                 print(f"  [early-stop] {stage_name}: validation plateaued for {cfg.early_stop_patience} epochs")
                 break
         _shutdown_loader_workers(reusable_loader)
@@ -953,6 +1064,7 @@ def save_training_artifacts(state: dict[str, Any]) -> dict[str, Any]:
         "selection_weight_top3_acc": cfg.selection_weight_top3_acc,
         "selection_weight_val_loss": cfg.selection_weight_val_loss,
         "grad_clip_norm": cfg.grad_clip_norm,
+        "scene_finetune_freeze_bn_stats": cfg.scene_finetune_freeze_bn_stats,
         "stage_plan": _stage_plan_summary(state),
         "n_classes": len(state["class_names"]),
         "class_names": [str(name) for name in state["class_names"]],
@@ -998,7 +1110,11 @@ def plot_stage_preview(state: dict[str, Any], samples_per_stage: int = 3, seed: 
     fig, axes = plt.subplots(len(selected), 3, figsize=(10, 3 * len(selected)), squeeze=False)
     cfg: ClassifierPipelineConfig = state["config"]
     for row_index, (stage_label, sample) in enumerate(selected):
-        image_crop, mask_crop = sample_to_crop_and_mask(sample, cfg.bbox_margin, cfg.mask_threshold)
+        image_crop, mask_crop = sample_to_crop_and_mask(
+            sample,
+            cfg.bbox_margin,
+            cfg.mask_threshold,
+        )
         image_lb, mask_lb = letterbox_image_and_mask(image_crop, mask_crop, cfg.img_size)
         masked = compose_masked_card_image(image_lb, mask_lb)
         axes[row_index, 0].imshow(cv2.cvtColor(image_lb, cv2.COLOR_BGR2RGB))

@@ -6,9 +6,9 @@ import json
 import math
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
+from tqdm.auto import tqdm
 
 
 PLAYERS = ("p1", "p2", "p3", "p4")
@@ -39,11 +40,12 @@ class CreateAugmentedDataConfig:
 
     seed: int = 67
 
-    n_aug_per_reference: int = 1000
+    n_aug_per_reference: int = 500
     aug_card_canvas: tuple[int, int] = (256, 256)
     aug_card_height_range: tuple[int, int] = (140, 220)
     aug_card_angle_range_deg: tuple[float, float] = (-25.0, 25.0)
     aug_card_shift_fraction: float = 0.12
+    aug_card_background_fill: int = 128
     aug_card_image_format: str = "jpg"
     aug_card_jpeg_quality: int = 80
     aug_card_generation_workers: int = 0
@@ -55,7 +57,7 @@ class CreateAugmentedDataConfig:
     scene_height: int = 720
     min_cards_per_player: int = 0
     max_cards_per_player: int = 6
-    mask_gap_pixels: int = 2
+    mask_gap_pixels: int = 5
     min_visible_card_area: int = 90
     clear_output_dirs: bool = True
 
@@ -72,7 +74,7 @@ class CreateAugmentedDataConfig:
     scene_image_format: str = "jpg"
     scene_jpeg_quality: int = 80
     scene_generation_workers: int = 0
-    scene_generation_backend: str = "thread"
+    scene_generation_backend: str = "process"
     scene_generation_chunk_size: int = 16
 
     scene_shadow_enabled: bool = True
@@ -81,7 +83,7 @@ class CreateAugmentedDataConfig:
     scene_shadow_opacity_range: tuple[float, float] = (0.14, 0.30)
 
     token_inward_distance_fraction_range: tuple[float, float] = (0.0, 0.05)
-    token_lateral_distance_fraction_range: tuple[float, float] = (0.23, 0.33)
+    token_lateral_distance_fraction_range: tuple[float, float] = (0.10, 0.20)
     token_side_mode: str = "right"
     token_center_jitter_fraction: float = 0.008
     token_clamp_margin_fraction: float = 0.02
@@ -105,6 +107,13 @@ class TokenAsset:
     source_path: Path | None
 
 
+@dataclass
+class AugmentationAssetCache:
+    funky_bg_image: np.ndarray | None = None
+    white_bg_image: np.ndarray | None = None
+    token_assets: dict[str, list[TokenAsset]] = field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class AugmentationPaths:
     project_root: Path
@@ -121,6 +130,18 @@ class AugmentationPaths:
     scenes_mask_dir: Path
     scenes_labels_path: Path
     token_asset_dir: Path
+
+
+_CARD_WORKER_ASSETS: list[CardAsset] | None = None
+_CARD_WORKER_CFG: CreateAugmentedDataConfig | None = None
+_CARD_WORKER_PATHS: AugmentationPaths | None = None
+_CARD_WORKER_FMT: str | None = None
+
+_SCENE_WORKER_ASSETS: list[CardAsset] | None = None
+_SCENE_WORKER_CFG: CreateAugmentedDataConfig | None = None
+_SCENE_WORKER_PATHS: AugmentationPaths | None = None
+_SCENE_WORKER_FMT: str | None = None
+_SCENE_WORKER_CACHE: AugmentationAssetCache | None = None
 
 
 def resolve_augmentation_paths(project_root: Path) -> AugmentationPaths:
@@ -171,6 +192,35 @@ def _write_image(path: Path, image_bgr: np.ndarray, fmt: str, jpeg_quality: int)
 
 def _natural_sort_key(path: Path) -> list[object]:
     return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path.name)]
+
+
+def _token_asset_from_image(image: np.ndarray, source_path: Path | None) -> TokenAsset:
+    if image.ndim == 3 and image.shape[2] == 4:
+        return TokenAsset(
+            image_bgr=image[:, :, :3],
+            mask=np.where(image[:, :, 3] > 0, 255, 0).astype(np.uint8),
+            source_path=source_path,
+        )
+    image_bgr = image[:, :, :3] if image.ndim == 3 else cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    return TokenAsset(image_bgr=image_bgr, mask=np.where(gray < 245, 255, 0).astype(np.uint8), source_path=source_path)
+
+
+def build_augmentation_asset_cache(paths: AugmentationPaths) -> AugmentationAssetCache:
+    token_assets: dict[str, list[TokenAsset]] = {player_name: [] for player_name in PLAYERS}
+    for style_dir in TOKEN_STYLE_DIRS.values():
+        token_dir = paths.token_asset_dir / style_dir
+        for player_name in PLAYERS:
+            for token_path in sorted(token_dir.glob(f"{player_name}.*"), key=_natural_sort_key):
+                image = cv2.imread(str(token_path), cv2.IMREAD_UNCHANGED)
+                if image is not None:
+                    token_assets[player_name].append(_token_asset_from_image(image, token_path))
+
+    return AugmentationAssetCache(
+        funky_bg_image=cv2.imread(str(paths.funky_bg_path), cv2.IMREAD_COLOR),
+        white_bg_image=cv2.imread(str(paths.white_bg_path), cv2.IMREAD_COLOR),
+        token_assets=token_assets,
+    )
 
 
 def _read_reference_labels(reference_csv: Path) -> dict[str, str]:
@@ -241,6 +291,13 @@ def _resolve_worker_count(requested: int, total: int) -> int:
     return min(int(requested), total)
 
 
+def _resolve_generation_backend(value: str) -> str:
+    backend = str(value).strip().lower()
+    if backend not in {"process", "thread"}:
+        raise ValueError("generation backend must be either 'process' or 'thread'")
+    return backend
+
+
 def sample_cover_crop(source_bgr: np.ndarray, height: int, width: int, rng: np.random.Generator) -> np.ndarray:
     source_h, source_w = source_bgr.shape[:2]
     cover_scale = max(width / source_w, height / source_h) * float(rng.uniform(1.0, 1.16))
@@ -264,11 +321,20 @@ def _fallback_background(height: int, width: int, rng: np.random.Generator) -> n
     return np.clip(base, 0, 255).astype(np.uint8)
 
 
-def make_background(paths: AugmentationPaths, height: int, width: int, rng: np.random.Generator) -> np.ndarray:
-    candidates = [paths.funky_bg_path, paths.white_bg_path]
-    rng.shuffle(candidates)
-    for path in candidates:
-        image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+def make_background(
+    paths: AugmentationPaths,
+    height: int,
+    width: int,
+    rng: np.random.Generator,
+    asset_cache: AugmentationAssetCache | None = None,
+) -> np.ndarray:
+    candidates = [
+        (paths.funky_bg_path, None if asset_cache is None else asset_cache.funky_bg_image),
+        (paths.white_bg_path, None if asset_cache is None else asset_cache.white_bg_image),
+    ]
+    for candidate_index in rng.permutation(len(candidates)):
+        path, cached_image = candidates[int(candidate_index)]
+        image = cached_image if cached_image is not None else cv2.imread(str(path), cv2.IMREAD_COLOR)
         if image is not None:
             background = sample_cover_crop(image, height, width, rng)
             alpha = float(rng.uniform(0.90, 1.10))
@@ -314,6 +380,42 @@ def transform_card(
     return image, np.where(mask > 127, 255, 0).astype(np.uint8), np.clip(alpha, 0.0, 1.0)
 
 
+def transform_standalone_card(
+    asset: CardAsset,
+    target_height: float,
+    angle_degrees: float,
+    rng: np.random.Generator,
+    border_fill: int = 128,
+) -> tuple[np.ndarray, np.ndarray]:
+    source_h, source_w = asset.image_bgr.shape[:2]
+    scale = float(target_height) / max(1, source_h)
+    new_w = max(1, int(round(source_w * scale)))
+    new_h = max(1, int(round(source_h * scale)))
+    image = cv2.resize(asset.image_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    mask = cv2.resize(asset.mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+
+    image = cv2.convertScaleAbs(image, alpha=float(rng.uniform(0.88, 1.14)), beta=float(rng.uniform(-16, 16)))
+    noise_std = float(rng.uniform(0.0, 5.5))
+    if noise_std > 0.1:
+        image = np.clip(image.astype(np.float32) + rng.normal(0.0, noise_std, image.shape), 0, 255).astype(np.uint8)
+
+    if abs(float(angle_degrees)) < 1e-6:
+        return image, np.where(mask > 127, 255, 0).astype(np.uint8)
+
+    center = (new_w / 2.0, new_h / 2.0)
+    matrix = cv2.getRotationMatrix2D(center, float(angle_degrees), 1.0)
+    abs_cos = abs(matrix[0, 0])
+    abs_sin = abs(matrix[0, 1])
+    rot_w = int(round(new_h * abs_sin + new_w * abs_cos))
+    rot_h = int(round(new_h * abs_cos + new_w * abs_sin))
+    matrix[0, 2] += rot_w / 2.0 - center[0]
+    matrix[1, 2] += rot_h / 2.0 - center[1]
+    fill = int(np.clip(border_fill, 0, 255))
+    image = cv2.warpAffine(image, matrix, (rot_w, rot_h), flags=cv2.INTER_LINEAR, borderValue=(fill, fill, fill))
+    mask = cv2.warpAffine(mask, matrix, (rot_w, rot_h), flags=cv2.INTER_NEAREST, borderValue=0)
+    return image, np.where(mask > 127, 255, 0).astype(np.uint8)
+
+
 def paste_patch(
     scene_bgr: np.ndarray,
     instance_map: np.ndarray,
@@ -347,6 +449,39 @@ def paste_patch(
     roi[:] = np.clip(roi.astype(np.float32) * (1.0 - alpha[:, :, None]) + patch.astype(np.float32) * alpha[:, :, None], 0, 255).astype(np.uint8)
     if instance_id is not None:
         instance_map[dst_t:dst_b, dst_l:dst_r][mask_bool] = instance_id
+    yy, xx = np.where(mask_bool)
+    return int(dst_l + xx.min()), int(dst_t + yy.min()), int(dst_l + xx.max() + 1), int(dst_t + yy.max() + 1)
+
+
+def paste_masked_patch_on_canvas(
+    canvas_bgr: np.ndarray,
+    instance_map: np.ndarray,
+    patch_bgr: np.ndarray,
+    patch_mask: np.ndarray,
+    center_xy: tuple[float, float],
+    instance_id: int = 1,
+) -> tuple[int, int, int, int] | None:
+    canvas_h, canvas_w = canvas_bgr.shape[:2]
+    patch_h, patch_w = patch_bgr.shape[:2]
+    left = int(round(center_xy[0] - patch_w / 2.0))
+    top = int(round(center_xy[1] - patch_h / 2.0))
+    right = left + patch_w
+    bottom = top + patch_h
+    dst_l, dst_t = max(0, left), max(0, top)
+    dst_r, dst_b = min(canvas_w, right), min(canvas_h, bottom)
+    if dst_r <= dst_l or dst_b <= dst_t:
+        return None
+
+    src_l, src_t = dst_l - left, dst_t - top
+    src_r, src_b = src_l + (dst_r - dst_l), src_t + (dst_b - dst_t)
+    raw_mask = patch_mask[src_t:src_b, src_l:src_r]
+    mask_bool = raw_mask > 127
+    if not np.any(mask_bool):
+        return None
+    canvas_roi = canvas_bgr[dst_t:dst_b, dst_l:dst_r]
+    patch_roi = patch_bgr[src_t:src_b, src_l:src_r]
+    canvas_roi[mask_bool] = patch_roi[mask_bool]
+    instance_map[dst_t:dst_b, dst_l:dst_r][mask_bool] = instance_id
     yy, xx = np.where(mask_bool)
     return int(dst_l + xx.min()), int(dst_t + yy.min()), int(dst_l + xx.max() + 1), int(dst_t + yy.max() + 1)
 
@@ -457,7 +592,17 @@ def _center_card_placement(card_assets: list[CardAsset], cfg: CreateAugmentedDat
     }
 
 
-def _load_token_asset(paths: AugmentationPaths, player_name: str, rng: np.random.Generator) -> TokenAsset:
+def _load_token_asset(
+    paths: AugmentationPaths,
+    player_name: str,
+    rng: np.random.Generator,
+    asset_cache: AugmentationAssetCache | None = None,
+) -> TokenAsset:
+    if asset_cache is not None:
+        cached_assets = asset_cache.token_assets.get(player_name, [])
+        if cached_assets:
+            return cached_assets[int(rng.integers(0, len(cached_assets)))]
+
     candidates: list[Path] = []
     for style_dir in TOKEN_STYLE_DIRS.values():
         candidates.extend(sorted((paths.token_asset_dir / style_dir).glob(f"{player_name}.*")))
@@ -501,22 +646,39 @@ def _token_center(player_name: str, cfg: CreateAugmentedDataConfig, rng: np.rand
     )
 
 
-def render_augmented_card(asset: CardAsset, rng: np.random.Generator, cfg: CreateAugmentedDataConfig, paths: AugmentationPaths) -> tuple[np.ndarray, np.ndarray]:
+def _augment_standalone_card_patch(
+    image_bgr: np.ndarray,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    if rng.random() < 0.12:
+        image_bgr = cv2.GaussianBlur(image_bgr, (3, 3), sigmaX=0.0)
+    return image_bgr
+
+
+def render_augmented_card(
+    asset: CardAsset,
+    rng: np.random.Generator,
+    cfg: CreateAugmentedDataConfig,
+    paths: AugmentationPaths,
+    asset_cache: AugmentationAssetCache | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     canvas_h, canvas_w = int(cfg.aug_card_canvas[1]), int(cfg.aug_card_canvas[0])
-    background = make_background(paths, canvas_h, canvas_w, rng)
-    image, mask, alpha = transform_card(
+    canvas_fill = int(np.clip(cfg.aug_card_background_fill, 0, 255))
+    canvas = np.full((canvas_h, canvas_w, 3), canvas_fill, dtype=np.uint8)
+    image, mask = transform_standalone_card(
         asset,
         target_height=float(rng.uniform(*cfg.aug_card_height_range)),
         angle_degrees=float(rng.uniform(*cfg.aug_card_angle_range_deg)),
         rng=rng,
-        apply_rotation=True,
+        border_fill=canvas_fill,
     )
-    instance_map = np.zeros((canvas_h, canvas_w), dtype=np.int32)
+    image = _augment_standalone_card_patch(image, rng)
+    instance_map = np.zeros((canvas_h, canvas_w), dtype=np.uint8)
     shift = cfg.aug_card_shift_fraction * min(canvas_h, canvas_w)
     center = (canvas_w / 2.0 + float(rng.normal(0, shift)), canvas_h / 2.0 + float(rng.normal(0, shift)))
-    paste_patch(background, instance_map, image, mask, center, patch_alpha=alpha, instance_id=1)
+    paste_masked_patch_on_canvas(canvas, instance_map, image, mask, center, instance_id=1)
     out_mask = np.where(instance_map > 0, 255, 0).astype(np.uint8)
-    return background, out_mask
+    return canvas, out_mask
 
 
 def compose_augmented_scene(
@@ -524,9 +686,10 @@ def compose_augmented_scene(
     rng: np.random.Generator,
     cfg: CreateAugmentedDataConfig,
     paths: AugmentationPaths,
+    asset_cache: AugmentationAssetCache | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
-    scene = make_background(paths, cfg.scene_height, cfg.scene_width, rng)
-    instance_map = np.zeros((cfg.scene_height, cfg.scene_width), dtype=np.int32)
+    scene = make_background(paths, cfg.scene_height, cfg.scene_width, rng, asset_cache)
+    instance_map = np.zeros((cfg.scene_height, cfg.scene_width), dtype=np.uint16)
     active_player = PLAYERS[int(rng.integers(0, len(PLAYERS)))]
     player_counts = {
         player: int(rng.integers(cfg.min_cards_per_player, cfg.max_cards_per_player + 1))
@@ -560,8 +723,8 @@ def compose_augmented_scene(
             "angle": float(placement["angle"]),
         })
 
-    token = _load_token_asset(paths, active_player, rng)
-    token_scale = float(rng.uniform(0.045, 0.070) * cfg.scene_height) / max(1, token.image_bgr.shape[0])
+    token = _load_token_asset(paths, active_player, rng, asset_cache)
+    token_scale = float(rng.uniform(0.080, 0.100) * cfg.scene_height) / max(1, token.image_bgr.shape[0])
     token_w = max(1, int(round(token.image_bgr.shape[1] * token_scale)))
     token_h = max(1, int(round(token.image_bgr.shape[0] * token_scale)))
     token_img = cv2.resize(token.image_bgr, (token_w, token_h), interpolation=cv2.INTER_AREA)
@@ -589,6 +752,7 @@ def initialize_create_augmented_data_pipeline(
     if cfg.clear_output_dirs:
         _clear_generated_outputs(paths)
     card_assets = load_reference_card_assets(paths)
+    asset_cache = build_augmentation_asset_cache(paths)
     card_fmt = _normalize_image_format(cfg.aug_card_image_format)
     scene_fmt = _normalize_image_format(cfg.scene_image_format)
     print(f"Project root: {paths.project_root}")
@@ -599,6 +763,7 @@ def initialize_create_augmented_data_pipeline(
         "cfg": cfg,
         "paths": paths,
         "card_assets": card_assets,
+        "asset_cache": asset_cache,
         "card_fmt": card_fmt,
         "scene_fmt": scene_fmt,
         "aug_rows": [],
@@ -609,14 +774,22 @@ def initialize_create_augmented_data_pipeline(
     }
 
 
-def _card_generation_task(args: tuple[int, int, int, CardAsset, CreateAugmentedDataConfig, AugmentationPaths, str]) -> dict[str, str]:
-    global_index, reference_index, aug_index, asset, cfg, paths, card_fmt = args
+def _compose_and_save_augmented_card(
+    global_index: int,
+    reference_index: int,
+    aug_index: int,
+    asset: CardAsset,
+    cfg: CreateAugmentedDataConfig,
+    paths: AugmentationPaths,
+    card_fmt: str,
+) -> dict[str, str]:
     rng = np.random.default_rng(cfg.seed + 10_000 + global_index)
     image_id = f"augmented_card_{global_index:05d}"
     image_bgr, mask = render_augmented_card(asset, rng, cfg, paths)
     image_path = paths.aug_cards_dir / f"{image_id}.{card_fmt}"
     mask_path = paths.aug_masks_dir / f"{image_id}.png"
     _write_image(image_path, image_bgr, fmt=card_fmt, jpeg_quality=cfg.aug_card_jpeg_quality)
+    mask_path.parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(str(mask_path), mask):
         raise OSError(f"Failed to write mask: {mask_path}")
     return {
@@ -630,6 +803,39 @@ def _card_generation_task(args: tuple[int, int, int, CardAsset, CreateAugmentedD
     }
 
 
+def _initialize_card_generation_worker(
+    assets: list[CardAsset],
+    cfg: CreateAugmentedDataConfig,
+    paths: AugmentationPaths,
+    card_fmt: str,
+) -> None:
+    global _CARD_WORKER_ASSETS, _CARD_WORKER_CFG, _CARD_WORKER_PATHS, _CARD_WORKER_FMT
+    _CARD_WORKER_ASSETS = assets
+    _CARD_WORKER_CFG = cfg
+    _CARD_WORKER_PATHS = paths
+    _CARD_WORKER_FMT = card_fmt
+
+
+def _card_generation_task(task: tuple[int, int, int]) -> dict[str, str]:
+    if (
+        _CARD_WORKER_ASSETS is None
+        or _CARD_WORKER_CFG is None
+        or _CARD_WORKER_PATHS is None
+        or _CARD_WORKER_FMT is None
+    ):
+        raise RuntimeError("Card-generation worker was not initialized")
+    global_index, reference_index, aug_index = task
+    return _compose_and_save_augmented_card(
+        global_index=global_index,
+        reference_index=reference_index,
+        aug_index=aug_index,
+        asset=_CARD_WORKER_ASSETS[reference_index],
+        cfg=_CARD_WORKER_CFG,
+        paths=_CARD_WORKER_PATHS,
+        card_fmt=_CARD_WORKER_FMT,
+    )
+
+
 def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
     """Generate every single-card crop and mask from the reference assets."""
     cfg: CreateAugmentedDataConfig = state["cfg"]
@@ -637,17 +843,41 @@ def run_card_generation(state: dict[str, Any]) -> dict[str, Any]:
     assets: list[CardAsset] = state["card_assets"]
     card_fmt: str = state["card_fmt"]
     tasks = [
-        (ref_idx * cfg.n_aug_per_reference + aug_idx, ref_idx, aug_idx, asset, cfg, paths, card_fmt)
+        (ref_idx * int(cfg.n_aug_per_reference) + aug_idx, ref_idx, aug_idx)
         for ref_idx, asset in enumerate(assets)
         for aug_idx in range(int(cfg.n_aug_per_reference))
     ]
     workers = _resolve_worker_count(int(cfg.aug_card_generation_workers), len(tasks))
-    print(f"Generating {len(tasks):,} augmented card crops with {workers} worker(s)...")
+    backend = _resolve_generation_backend(cfg.aug_card_generation_backend)
+    print(f"Generating {len(tasks):,} augmented card crops with {workers} {backend} worker(s)...")
     if workers == 1:
-        rows = [_card_generation_task(task) for task in tasks]
+        rows = [
+            _compose_and_save_augmented_card(
+                global_index=task[0],
+                reference_index=task[1],
+                aug_index=task[2],
+                asset=assets[task[1]],
+                cfg=cfg,
+                paths=paths,
+                card_fmt=card_fmt,
+            )
+            for task in tqdm(tasks, desc="Card generation", unit="card", dynamic_ncols=True)
+        ]
     else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            rows = list(executor.map(_card_generation_task, tasks, chunksize=max(1, int(cfg.aug_card_generation_chunk_size))))
+        executor_cls = ProcessPoolExecutor if backend == "process" else ThreadPoolExecutor
+        map_kwargs = {"chunksize": max(1, int(cfg.aug_card_generation_chunk_size))} if backend == "process" else {}
+        with executor_cls(
+            max_workers=workers,
+            initializer=_initialize_card_generation_worker,
+            initargs=(assets, cfg, paths, card_fmt),
+        ) as executor:
+            rows = list(tqdm(
+                executor.map(_card_generation_task, tasks, **map_kwargs),
+                total=len(tasks),
+                desc="Card generation",
+                unit="card",
+                dynamic_ncols=True,
+            ))
     rows.sort(key=lambda row: row["image_id"])
     paths.labels_dir.mkdir(parents=True, exist_ok=True)
     with paths.aug_csv_path.open("w", newline="", encoding="utf-8") as csv_file:
@@ -663,7 +893,8 @@ def run_scene_preview(state: dict[str, Any]) -> dict[str, Any]:
     """Render one unsaved scene for quick notebook inspection."""
     cfg: CreateAugmentedDataConfig = state["cfg"]
     paths: AugmentationPaths = state["paths"]
-    scene_bgr, mask, metadata = compose_augmented_scene(state["card_assets"], np.random.default_rng(cfg.seed + 999), cfg, paths)
+    asset_cache: AugmentationAssetCache = state.get("asset_cache") or build_augmentation_asset_cache(paths)
+    scene_bgr, mask, metadata = compose_augmented_scene(state["card_assets"], np.random.default_rng(cfg.seed + 999), cfg, paths, asset_cache)
     state["preview_scene_bgr"] = scene_bgr
     state["preview_mask"] = mask
     state["preview_metadata"] = metadata
@@ -671,14 +902,21 @@ def run_scene_preview(state: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
-def _scene_generation_task(args: tuple[int, CreateAugmentedDataConfig, AugmentationPaths, list[CardAsset], str]) -> dict[str, Any]:
-    scene_index, cfg, paths, card_assets, scene_fmt = args
+def _compose_and_save_scene(
+    scene_index: int,
+    cfg: CreateAugmentedDataConfig,
+    paths: AugmentationPaths,
+    card_assets: list[CardAsset],
+    scene_fmt: str,
+    asset_cache: AugmentationAssetCache | None,
+) -> dict[str, Any]:
     rng = np.random.default_rng(cfg.seed + 200_000 + scene_index)
-    scene_bgr, scene_mask, metadata = compose_augmented_scene(card_assets, rng, cfg, paths)
+    scene_bgr, scene_mask, metadata = compose_augmented_scene(card_assets, rng, cfg, paths, asset_cache)
     scene_name = f"augmented_scene_{scene_index:05d}"
     image_path = paths.scenes_img_dir / f"{scene_name}.{scene_fmt}"
     mask_path = paths.scenes_mask_dir / f"{scene_name}.png"
     _write_image(image_path, scene_bgr, fmt=scene_fmt, jpeg_quality=cfg.scene_jpeg_quality)
+    mask_path.parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(str(mask_path), scene_mask):
         raise OSError(f"Failed to write scene mask: {mask_path}")
     return {
@@ -689,19 +927,77 @@ def _scene_generation_task(args: tuple[int, CreateAugmentedDataConfig, Augmentat
     }
 
 
+def _initialize_scene_generation_worker(
+    assets: list[CardAsset],
+    cfg: CreateAugmentedDataConfig,
+    paths: AugmentationPaths,
+    scene_fmt: str,
+    asset_cache: AugmentationAssetCache,
+) -> None:
+    global _SCENE_WORKER_ASSETS, _SCENE_WORKER_CFG, _SCENE_WORKER_PATHS, _SCENE_WORKER_FMT, _SCENE_WORKER_CACHE
+    _SCENE_WORKER_ASSETS = assets
+    _SCENE_WORKER_CFG = cfg
+    _SCENE_WORKER_PATHS = paths
+    _SCENE_WORKER_FMT = scene_fmt
+    _SCENE_WORKER_CACHE = asset_cache
+
+
+def _scene_generation_task(scene_index: int) -> dict[str, Any]:
+    if (
+        _SCENE_WORKER_ASSETS is None
+        or _SCENE_WORKER_CFG is None
+        or _SCENE_WORKER_PATHS is None
+        or _SCENE_WORKER_FMT is None
+    ):
+        raise RuntimeError("Scene-generation worker was not initialized")
+    return _compose_and_save_scene(
+        scene_index=scene_index,
+        cfg=_SCENE_WORKER_CFG,
+        paths=_SCENE_WORKER_PATHS,
+        card_assets=_SCENE_WORKER_ASSETS,
+        scene_fmt=_SCENE_WORKER_FMT,
+        asset_cache=_SCENE_WORKER_CACHE,
+    )
+
+
 def run_scene_generation(state: dict[str, Any]) -> dict[str, Any]:
     """Generate synthetic tabletop scenes, segmentation masks, and augmented_scenes.json."""
     cfg: CreateAugmentedDataConfig = state["cfg"]
     paths: AugmentationPaths = state["paths"]
+    asset_cache: AugmentationAssetCache = state.get("asset_cache") or build_augmentation_asset_cache(paths)
     scene_fmt: str = state["scene_fmt"]
-    tasks = [(idx, cfg, paths, state["card_assets"], scene_fmt) for idx in range(int(cfg.n_scenes))]
+    card_assets: list[CardAsset] = state["card_assets"]
+    tasks = list(range(int(cfg.n_scenes)))
     workers = _resolve_worker_count(int(cfg.scene_generation_workers), len(tasks))
-    print(f"Generating {len(tasks):,} augmented scenes with {workers} worker(s)...")
+    backend = _resolve_generation_backend(cfg.scene_generation_backend)
+    print(f"Generating {len(tasks):,} augmented scenes with {workers} {backend} worker(s)...")
     if workers == 1:
-        records = [_scene_generation_task(task) for task in tasks]
+        records = [
+            _compose_and_save_scene(
+                scene_index=task,
+                cfg=cfg,
+                paths=paths,
+                card_assets=card_assets,
+                scene_fmt=scene_fmt,
+                asset_cache=asset_cache,
+            )
+            for task in tqdm(tasks, desc="Scene generation", unit="scene", dynamic_ncols=True)
+        ]
     else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            records = list(executor.map(_scene_generation_task, tasks, chunksize=max(1, int(cfg.scene_generation_chunk_size))))
+        executor_cls = ProcessPoolExecutor if backend == "process" else ThreadPoolExecutor
+        map_kwargs = {"chunksize": max(1, int(cfg.scene_generation_chunk_size))} if backend == "process" else {}
+        with executor_cls(
+            max_workers=workers,
+            initializer=_initialize_scene_generation_worker,
+            initargs=(card_assets, cfg, paths, scene_fmt, asset_cache),
+        ) as executor:
+            records = list(tqdm(
+                executor.map(_scene_generation_task, tasks, **map_kwargs),
+                total=len(tasks),
+                desc="Scene generation",
+                unit="scene",
+                dynamic_ncols=True,
+            ))
     records.sort(key=lambda row: row["scene"])
     paths.labels_dir.mkdir(parents=True, exist_ok=True)
     paths.scenes_labels_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
