@@ -16,12 +16,14 @@ project/training_data/training_images/**/*.png
 project/training_data/training_masks/**/*.jpg
 project/training_data/training_masks/**/*.png
 project/training_data/reference_manual_masks/*.afphoto
-
+training_data/
+models/
 # ignore models
 project/models/
 
 # ignore classifiers
 *.pkl
+.old/
 
 
 # ignore dorian's files
