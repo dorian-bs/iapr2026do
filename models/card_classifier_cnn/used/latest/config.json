@@ -31,7 +31,7 @@
   "max_loaded_scene_images": null,
   "best_selection_policy": "last_stage_best_by_selection_metric",
   "best_selection_metric": "composite",
-  "best_selection_score": 0.8451124483754188,
+  "best_selection_score": 0.855007378551149,
   "selection_weight_val_acc": 0.35,
   "selection_weight_macro_f1": 0.3,
   "selection_weight_balanced_acc": 0.2,
@@ -41,15 +41,15 @@
   "stage_plan": [
     {
       "stage": "stage1_augmented_cards",
-      "epochs": 2,
+      "epochs": 4,
       "learning_rate": 0.001,
-      "n_samples": 27000,
+      "n_samples": 54000,
       "samples_per_epoch": 4096
     },
     {
       "stage": "stage2_scene_manual_masks",
       "epochs": 120,
-      "learning_rate": 0.0003,
+      "learning_rate": 0.0004,
       "n_samples": 127572,
       "samples_per_epoch": 4096
     }
@@ -112,9 +112,9 @@
     "y_skip"
   ],
   "validation_samples": 32344,
-  "best_val_accuracy": 0.8564494187484541,
+  "best_val_accuracy": 0.866744991343062,
   "best_stage": "stage2_scene_manual_masks",
-  "best_epoch": 85,
+  "best_epoch": 71,
   "trainable_params": 9853134,
   "seed": 42
 }
