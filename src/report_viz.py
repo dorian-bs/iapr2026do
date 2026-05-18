@@ -922,6 +922,13 @@ def run_saliency_pipeline(engine, image_path):
     saliency_results = []
 
     # Compute feature importances via backpropagation gradients
+    # Look for class names inside the engine structure
+    # Usually stored in engine.class_names or engine.config / engine.classifier
+    class_names = getattr(engine, 'class_names', None)
+    if class_names is None and hasattr(engine, 'classifier'):
+        class_names = getattr(engine.classifier, 'class_names', None)
+
+    # Compute feature importances via backpropagation gradients
     for idx, (inp, out) in enumerate(zip(captured_inputs, captured_predictions)):
         inp_var = inp.clone().requires_grad_(True)
         
@@ -934,25 +941,28 @@ def run_saliency_pipeline(engine, image_path):
         saliency = inp_var.grad.cpu().numpy()[0]   # (4, H, W)
         input_np = inp.numpy()[0]                  # (4, H, W)
         
-        # Max absolute gradient across RGB, and absolute gradient for the Mask channel
         rgb_saliency = np.max(np.abs(saliency[:3]), axis=0)
         mask_saliency = np.abs(saliency[3])
         
-        # Normalize input crop back to [0, 1] for visual plotting
         rgb_img = input_np[:3].transpose(1, 2, 0)
         rgb_img = (rgb_img - rgb_img.min()) / (rgb_img.max() - rgb_img.min() + 1e-8)
         mask_img = input_np[3]
         
+        # Determine the string name if class_names array exists, otherwise fallback to the index
+        if class_names is not None and pred_class < len(class_names):
+            class_label = class_names[pred_class]
+        else:
+            class_label = f"Class {pred_class}" # Fallback if names array isn't exposed there
+        
         saliency_results.append({
             'card_idx': idx,
-            'pred_class': pred_class,
+            'pred_class': class_label,  # <--- Changed this to hold the string label
             'rgb_img': rgb_img,
             'mask_img': mask_img,
             'rgb_saliency': rgb_saliency,
             'mask_saliency': mask_saliency
         })
-        
-    return saliency_results
+        return saliency_results
 
 
 def plot_saliency_dashboard(saliency_results):
