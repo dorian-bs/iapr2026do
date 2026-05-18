@@ -38,7 +38,7 @@ class ClassifierPipelineConfig:
     mask_threshold: float = 0.50
     val_split: float = 0.20
 
-    stage_1_epochs: int = 2
+    stage_1_epochs: int = 4
     stage_2_epochs: int = 120
 
     stage_1_lr: float = 1e-3

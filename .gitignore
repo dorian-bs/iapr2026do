@@ -16,7 +16,9 @@ training_data/augmented_data/**/*.png
 training_data/reference_manual_masks/*.afphoto
 
 # ignore models
-models/
+models/**/**.pth
+models/**/**.npy
+models/**/**.json
 
 # ignore classifiers
 *.pkl
