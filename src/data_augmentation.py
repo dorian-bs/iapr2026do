@@ -40,7 +40,7 @@ class CreateAugmentedDataConfig:
 
     seed: int = 67
 
-    n_aug_per_reference: int = 500
+    n_aug_per_reference: int = 1000
     aug_card_canvas: tuple[int, int] = (256, 256)
     aug_card_height_range: tuple[int, int] = (140, 220)
     aug_card_angle_range_deg: tuple[float, float] = (-25.0, 25.0)
@@ -57,7 +57,7 @@ class CreateAugmentedDataConfig:
     scene_height: int = 720
     min_cards_per_player: int = 0
     max_cards_per_player: int = 6
-    mask_gap_pixels: int = 5
+    mask_gap_pixels: int = 4
     min_visible_card_area: int = 90
     clear_output_dirs: bool = True
 
@@ -80,7 +80,7 @@ class CreateAugmentedDataConfig:
     scene_shadow_enabled: bool = True
     scene_shadow_offset_fraction_range: tuple[float, float] = (0.006, 0.020)
     scene_shadow_blur_fraction_range: tuple[float, float] = (0.003, 0.010)
-    scene_shadow_opacity_range: tuple[float, float] = (0.14, 0.30)
+    scene_shadow_opacity_range: tuple[float, float] = (0.25, 0.50)
 
     token_inward_distance_fraction_range: tuple[float, float] = (0.0, 0.05)
     token_lateral_distance_fraction_range: tuple[float, float] = (0.10, 0.20)

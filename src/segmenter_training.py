@@ -46,7 +46,7 @@ class SegmenterPipelineConfig:
     num_workers: int = 4
     persistent_workers: bool = True
 
-    epochs: int = 25
+    epochs: int = 40
     batch_size: int = 8
     learning_rate: float = 5e-4
     weight_decay: float = 1e-4
@@ -57,7 +57,7 @@ class SegmenterPipelineConfig:
 
     use_amp: bool = True
     use_torch_compile: bool = False
-    early_stopping_patience: int | None = 8
+    early_stopping_patience: int | None = 6
     log_every_batches: int = 0
 
     warm_start: bool = False
@@ -65,7 +65,7 @@ class SegmenterPipelineConfig:
     checkpoint_filename: str = "scene_segmenter_unet_small.pth"
 
     preview_count: int = 6
-    eval_mask_threshold: float = 0.5
+    eval_mask_threshold: float = 0.7
     eval_min_component_area: int | None = None
 
     best_epoch_selection_metric: str = "composite"
