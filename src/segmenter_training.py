@@ -38,15 +38,15 @@ class SegmenterPipelineConfig:
     """Configuration used by the segmenter training notebook."""
 
     seed: int = 42
-    image_size: int = 512
+    image_size: int = 256
     val_split: float = 0.25
     max_scene_pairs: int | None = None
-    epoch_max_train_samples: int | None = 4092
+    epoch_max_train_samples: int | None = 8192
     cache_in_ram: bool = True
     num_workers: int = 4
     persistent_workers: bool = True
 
-    epochs: int = 24
+    epochs: int = 50
     batch_size: int = 8
     learning_rate: float = 2e-4
     weight_decay: float = 1e-4
@@ -57,7 +57,7 @@ class SegmenterPipelineConfig:
 
     use_amp: bool = True
     use_torch_compile: bool = False
-    early_stopping_patience: int | None = 6
+    early_stopping_patience: int | None = 8
     log_every_batches: int = 0
 
     warm_start: bool = False
