@@ -57,7 +57,7 @@ class CreateAugmentedDataConfig:
     scene_height: int = 720
     min_cards_per_player: int = 0
     max_cards_per_player: int = 6
-    mask_gap_pixels: int = 4
+    mask_gap_pixels: int = 7
     min_visible_card_area: int = 90
     clear_output_dirs: bool = True
 

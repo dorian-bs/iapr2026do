@@ -40,6 +40,7 @@ class SegmenterPipelineConfig:
     seed: int = 42
     image_size: int = 256
     val_split: float = 0.30
+    val_split: float = 0.30
     max_scene_pairs: int | None = None
     epoch_max_train_samples: int | None = 8192
     cache_in_ram: bool = True
@@ -57,7 +58,7 @@ class SegmenterPipelineConfig:
 
     use_amp: bool = True
     use_torch_compile: bool = False
-    early_stopping_patience: int | None = 6
+    early_stopping_patience: int | None = 8
     log_every_batches: int = 0
 
     warm_start: bool = False
