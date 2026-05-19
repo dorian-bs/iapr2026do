@@ -3,7 +3,7 @@
 EPFL EE-451 final project. Recover the structured game state (center card,
 active player, four hands) from snapshots of a multiplayer UNO game.
 
-Group: `<group_id>` — `<kaggle_group_name>`. See `report.ipynb` for the full
+Group: `77` — `Eleonora Kazda`. See `report.ipynb` for the full
 write-up.
 
 ## Repository layout
